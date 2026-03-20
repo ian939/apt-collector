@@ -22,7 +22,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from src.fetch import fetch_all_regions, save_raw
+from src.fetch import fetch_all_regions, save_raw, _debug_cookie_status
 from src.filter import run_filter
 from src.analyzer import analyze_listings
 from src.upsert import upsert_listings
@@ -75,8 +75,7 @@ def main() -> None:
     # ──────────────────────────────────────────
     # Step 1: 설정 로드
     # ──────────────────────────────────────────
-    cookie_set = bool(os.environ.get("NAVER_COOKIES", ""))
-    logger.info(f"NAVER_COOKIES 설정 여부: {'YES' if cookie_set else 'NO (429 발생 가능)'}")
+    logger.info(f"NAVER_COOKIES: {_debug_cookie_status()}")
 
     logger.info("Step 1: 설정 로드")
     try:

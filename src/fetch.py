@@ -14,8 +14,10 @@ BASE_URL = "https://new.land.naver.com/api/articles"
 _cookie = os.environ.get("NAVER_COOKIES", "")
 
 HEADERS = {
+    "Accept": "application/json, text/plain, */*",
     "Accept-Encoding": "gzip, deflate, br",
-    "Accept-Language": "ko-KR,ko;q=0.9",
+    "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+    "Connection": "keep-alive",
     "Host": "new.land.naver.com",
     "Referer": "https://new.land.naver.com/",
     "Sec-Fetch-Dest": "empty",
@@ -28,6 +30,13 @@ HEADERS = {
     ),
     **({"Cookie": _cookie} if _cookie else {}),
 }
+
+
+def _debug_cookie_status() -> str:
+    """쿠키 설정 여부와 앞 30자 반환 (디버그용)."""
+    if not _cookie:
+        return "COOKIE_NOT_SET"
+    return f"COOKIE_SET(len={len(_cookie)}, preview={_cookie[:30]}...)"
 
 
 def _request_with_retry(url: str, params: dict, max_retry: int = 1) -> dict | None:
