@@ -75,6 +75,9 @@ def main() -> None:
     # ──────────────────────────────────────────
     # Step 1: 설정 로드
     # ──────────────────────────────────────────
+    cookie_set = bool(os.environ.get("NAVER_COOKIES", ""))
+    logger.info(f"NAVER_COOKIES 설정 여부: {'YES' if cookie_set else 'NO (429 발생 가능)'}")
+
     logger.info("Step 1: 설정 로드")
     try:
         config = load_config()
