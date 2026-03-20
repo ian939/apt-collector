@@ -79,10 +79,11 @@ def fetch_all_regions(regions: list[dict], max_price_10k: int) -> tuple[dict, di
         # 홈 페이지 로드 — JS가 실행되어 Authorization 토큰이 초기화됨
         print("[fetch] Playwright: 홈 페이지 로딩 중...")
         try:
-            bpage.goto(NAVER_HOME, wait_until="domcontentloaded", timeout=25000)
+            bpage.goto(NAVER_HOME, wait_until="networkidle", timeout=30000)
         except PWTimeout:
             print("[fetch] Playwright: 홈 로딩 타임아웃 (계속 진행)")
-        bpage.wait_for_timeout(3000)
+        # JS 토큰 초기화 충분히 대기
+        bpage.wait_for_timeout(6000)
         print("[fetch] Playwright: 홈 로딩 완료, API 수집 시작")
 
         for i, region in enumerate(regions):
