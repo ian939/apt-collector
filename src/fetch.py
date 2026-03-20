@@ -97,13 +97,14 @@ def get_auth_headers() -> dict:
             auth_token = auth_token_holder[0]
             browser.close()
 
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[fetch] Playwright 오류: {e}")
 
     # Playwright 실패 시 환경변수 쿠키 폴백
     if not cookie_str:
         cookie_str = os.environ.get("NAVER_COOKIES", "")
 
+    print(f"[fetch] Playwright 결과: token={'YES' if auth_token else 'NO'}, cookie_len={len(cookie_str)}")
     return _base_headers(auth_token=auth_token, cookie=cookie_str)
 
 
@@ -206,6 +207,9 @@ def fetch_all_regions(regions: list[dict], max_price_10k: int) -> tuple[dict, di
         ({"강남구": [...], ...}, {"실패구": "에러메시지", ...})
     """
     headers = get_auth_headers()
+    auth = headers.get("Authorization", "")
+    cookie = headers.get("Cookie", "")
+    print(f"[fetch] auth_token={'YES('+auth[:30]+')' if auth else 'NO'}, cookie={'YES(len='+str(len(cookie))+')' if cookie else 'NO'}")
 
     results = {}
     errors = {}
