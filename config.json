@@ -1,0 +1,17 @@
+{
+  "regions": [
+    { "name": "강남구", "cortarNo": "1168000000" },
+    { "name": "강동구", "cortarNo": "1174000000" },
+    { "name": "광진구", "cortarNo": "1121500000" },
+    { "name": "송파구", "cortarNo": "1171000000" },
+    { "name": "서초구", "cortarNo": "1165000000" }
+  ],
+  "filters": {
+    "max_price_10k": 200000,
+    "min_rooms": 3
+  },
+  "urgent_keywords": ["급매", "급처", "급급매", "가격조정"],
+  "schedule": {
+    "cron": "0 22 * * *"
+  }
+}

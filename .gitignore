@@ -1,0 +1,27 @@
+# 매물 데이터 (민감 정보 포함 가능)
+output/listings.csv
+output/temp/
+
+# 환경변수
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
