@@ -1,229 +1,130 @@
 """
 네이버부동산 내부 API 호출 모듈.
-구별 아파트 매매 매물을 수집하고 원본 JSON을 반환한다.
 
-토큰 획득: Playwright로 new.land.naver.com 접속 후
-Authorization Bearer 토큰을 인터셉트하여 사용.
+Playwright 헤드리스 브라우저 안에서 fetch()를 실행하므로
+Authorization Bearer 토큰이 자동으로 포함된다.
 """
 
 import json
 import os
 import random
 import time
-import requests
 
 BASE_URL = "https://new.land.naver.com/api/articles"
 NAVER_HOME = "https://new.land.naver.com/complexes"
 
-# 런타임에 채워질 헤더 (get_auth_headers() 호출 후 사용)
-_runtime_headers: dict = {}
 
-
-def _base_headers(auth_token: str = "", cookie: str = "") -> dict:
-    h = {
-        "Accept": "application/json, text/plain, */*",
-        "Accept-Encoding": "gzip, deflate, br",
-        "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
-        "Connection": "keep-alive",
-        "Referer": "https://new.land.naver.com/",
-        "Sec-Fetch-Dest": "empty",
-        "Sec-Fetch-Mode": "cors",
-        "Sec-Fetch-Site": "same-origin",
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/122.0.0.0 Safari/537.36"
-        ),
+def _build_params(cortar_no: str, max_price_10k: int, page: int) -> dict:
+    return {
+        "cortarNo": cortar_no,
+        "realEstateType": "APT",
+        "tradeType": "A1",
+        "priceMin": "0",
+        "priceMax": str(max_price_10k),
+        "areaMin": "0",
+        "areaMax": "900000",
+        "sameAddressGroup": "false",
+        "showArticle": "false",
+        "page": str(page),
+        "order": "rank",
     }
-    if auth_token:
-        h["Authorization"] = auth_token
-    if cookie:
-        h["Cookie"] = cookie
-    return h
 
 
-def get_auth_headers() -> dict:
-    """
-    Playwright로 Naver 부동산에 접속해 Authorization Bearer 토큰과 쿠키를 획득.
-    실패 시 환경변수 NAVER_COOKIES만 사용한 헤더 반환.
-    """
-    try:
-        from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
-    except ImportError:
-        cookie = os.environ.get("NAVER_COOKIES", "")
-        return _base_headers(cookie=cookie)
+def _fetch_page_in_browser(page, cortar_no: str, max_price_10k: int, page_num: int) -> dict:
+    """Playwright 페이지 컨텍스트 안에서 API 한 페이지 호출."""
+    params = _build_params(cortar_no, max_price_10k, page_num)
+    query = "&".join(f"{k}={v}" for k, v in params.items())
+    url = f"{BASE_URL}?{query}"
 
-    auth_token = ""
-    cookie_str = ""
-    captured = {"done": False}
-
-    def handle_request(request):
-        if captured["done"]:
-            return
-        auth = request.headers.get("authorization", "")
-        if auth.startswith("Bearer ") and "land.naver.com/api" in request.url:
-            auth_token_holder[0] = auth
-            captured["done"] = True
-
-    auth_token_holder = [""]
-
-    try:
-        with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
-            context = browser.new_context(
-                user_agent=(
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/122.0.0.0 Safari/537.36"
-                )
-            )
-            page = context.new_page()
-            page.on("request", handle_request)
-
-            try:
-                page.goto(NAVER_HOME, timeout=20000, wait_until="domcontentloaded")
-            except PWTimeout:
-                pass
-
-            # 토큰이 인터셉트될 때까지 최대 15초 대기
-            for _ in range(30):
-                if captured["done"]:
-                    break
-                time.sleep(0.5)
-
-            # 쿠키 수집
-            cookies = context.cookies()
-            cookie_str = "; ".join(f"{c['name']}={c['value']}" for c in cookies)
-            auth_token = auth_token_holder[0]
-            browser.close()
-
-    except Exception as e:
-        print(f"[fetch] Playwright 오류: {e}")
-
-    # Playwright 실패 시 환경변수 쿠키 폴백
-    if not cookie_str:
-        cookie_str = os.environ.get("NAVER_COOKIES", "")
-
-    print(f"[fetch] Playwright 결과: token={'YES' if auth_token else 'NO'}, cookie_len={len(cookie_str)}")
-    return _base_headers(auth_token=auth_token, cookie=cookie_str)
-
-
-def _debug_auth_status(headers: dict) -> str:
-    auth = headers.get("Authorization", "")
-    cookie = headers.get("Cookie", "")
-    auth_info = f"token={'YES' if auth else 'NO'}"
-    cookie_info = f"cookie={'YES(len=' + str(len(cookie)) + ')' if cookie else 'NO'}"
-    return f"{auth_info}, {cookie_info}"
-
-
-def _request_with_retry(url: str, params: dict, headers: dict, max_retry: int = 1) -> dict | None:
-    """단일 GET 요청. 실패 시 1회 재시도."""
-    for attempt in range(max_retry + 1):
-        try:
-            response = requests.get(url, params=params, headers=headers, timeout=15)
-            response.raise_for_status()
-            response.encoding = "utf-8-sig"
-            return response.json()
-        except requests.exceptions.HTTPError as e:
-            if attempt < max_retry:
-                time.sleep(3)
-                continue
-            raise RuntimeError(f"HTTP 오류 {e.response.status_code}: {url}") from e
-        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
-            if attempt < max_retry:
-                time.sleep(3)
-                continue
-            raise RuntimeError(f"네트워크 오류: {e}") from e
-        except (ValueError, KeyError) as e:
-            raise RuntimeError(f"API 응답 파싱 실패 — 구조 변경 의심: {e}") from e
-
-
-def fetch_region(region: dict, max_price_10k: int, headers: dict) -> list[dict]:
-    """
-    단일 구의 아파트 매매 매물 전체를 수집한다.
-
-    Args:
-        region: {"name": "강남구", "cortarNo": "1168000000"}
-        max_price_10k: 호가 상한 (만원 단위, 예: 200000 = 20억)
-        headers: Authorization + Cookie 포함 헤더
-
-    Returns:
-        매물 dict 리스트 (articleList 필드)
-    """
-    cortar_no = region["cortarNo"]
-    region_name = region["name"]
-    all_articles = []
-    page = 1
-
-    while True:
-        params = {
-            "cortarNo": cortar_no,
-            "realEstateType": "APT",
-            "tradeType": "A1",
-            "priceMin": 0,
-            "priceMax": max_price_10k,
-            "areaMin": 0,
-            "areaMax": 900000,
-            "sameAddressGroup": "false",
-            "showArticle": "false",
-            "page": page,
-            "order": "rank",
-        }
-
-        data = _request_with_retry(BASE_URL, params, headers)
-
-        if data is None:
-            break
-
-        if "articleList" not in data:
-            raise RuntimeError(
-                f"API 응답에 'articleList' 필드 없음 — 구조 변경 감지 ({region_name})"
-            )
-
-        articles = data["articleList"]
-        if not articles:
-            break
-
-        for article in articles:
-            article["_region"] = region_name
-
-        all_articles.extend(articles)
-
-        is_more = data.get("isMoreData", False)
-        if not is_more:
-            break
-
-        page += 1
-        time.sleep(random.uniform(1.0, 3.0))
-
-    return all_articles
+    result = page.evaluate(f"""
+        async () => {{
+            const resp = await fetch('{url}', {{
+                method: 'GET',
+                headers: {{ 'Accept': 'application/json, text/plain, */*' }}
+            }});
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            return await resp.json();
+        }}
+    """)
+    return result
 
 
 def fetch_all_regions(regions: list[dict], max_price_10k: int) -> tuple[dict, dict]:
     """
-    5개 구 순차 수집. 개별 구 실패 시 스킵하고 로그에 기록.
+    Playwright 브라우저 안에서 5개 구 순차 수집.
+    브라우저 컨텍스트가 Authorization 헤더를 자동 포함한다.
 
     Returns:
         ({"강남구": [...], ...}, {"실패구": "에러메시지", ...})
     """
-    headers = get_auth_headers()
-    auth = headers.get("Authorization", "")
-    cookie = headers.get("Cookie", "")
-    print(f"[fetch] auth_token={'YES('+auth[:30]+')' if auth else 'NO'}, cookie={'YES(len='+str(len(cookie))+')' if cookie else 'NO'}")
+    try:
+        from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
+    except ImportError:
+        return {}, {"전체": "playwright 미설치 — pip install playwright 후 playwright install chromium"}
 
     results = {}
     errors = {}
 
-    for i, region in enumerate(regions):
-        name = region["name"]
-        try:
-            articles = fetch_region(region, max_price_10k, headers)
-            results[name] = articles
-        except RuntimeError as e:
-            errors[name] = str(e)
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        context = browser.new_context(
+            user_agent=(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/122.0.0.0 Safari/537.36"
+            )
+        )
+        bpage = context.new_page()
 
-        if i < len(regions) - 1:
-            time.sleep(random.uniform(2.0, 5.0))
+        # 홈 페이지 로드 — JS가 실행되어 Authorization 토큰이 초기화됨
+        print("[fetch] Playwright: 홈 페이지 로딩 중...")
+        try:
+            bpage.goto(NAVER_HOME, wait_until="domcontentloaded", timeout=25000)
+        except PWTimeout:
+            print("[fetch] Playwright: 홈 로딩 타임아웃 (계속 진행)")
+        bpage.wait_for_timeout(3000)
+        print("[fetch] Playwright: 홈 로딩 완료, API 수집 시작")
+
+        for i, region in enumerate(regions):
+            name = region["name"]
+            cortar_no = region["cortarNo"]
+            all_articles = []
+            page_num = 1
+
+            try:
+                while True:
+                    data = _fetch_page_in_browser(bpage, cortar_no, max_price_10k, page_num)
+
+                    if "articleList" not in data:
+                        raise RuntimeError(
+                            f"API 응답에 'articleList' 없음 — 구조 변경 의심 ({name})"
+                        )
+
+                    articles = data["articleList"]
+                    if not articles:
+                        break
+
+                    for article in articles:
+                        article["_region"] = name
+                    all_articles.extend(articles)
+
+                    if not data.get("isMoreData", False):
+                        break
+
+                    page_num += 1
+                    time.sleep(random.uniform(1.0, 3.0))
+
+                results[name] = all_articles
+                print(f"[fetch] {name}: {len(all_articles)}건 수집")
+
+            except Exception as e:
+                errors[name] = str(e)
+                print(f"[fetch] {name} 실패: {e}")
+
+            if i < len(regions) - 1:
+                time.sleep(random.uniform(2.0, 5.0))
+
+        browser.close()
 
     return results, errors
 
