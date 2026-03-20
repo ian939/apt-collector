@@ -29,6 +29,7 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          NAVER_COOKIES: ${{ secrets.NAVER_COOKIES }}
 
       - name: 로그 커밋 및 푸시
         run: |

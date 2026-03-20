@@ -4,11 +4,14 @@
 """
 
 import json
+import os
 import random
 import time
 import requests
 
 BASE_URL = "https://new.land.naver.com/api/articles"
+
+_cookie = os.environ.get("NAVER_COOKIES", "")
 
 HEADERS = {
     "Accept-Encoding": "gzip, deflate, br",
@@ -23,6 +26,7 @@ HEADERS = {
         "AppleWebKit/537.36 (KHTML, like Gecko) "
         "Chrome/122.0.0.0 Safari/537.36"
     ),
+    **({"Cookie": _cookie} if _cookie else {}),
 }
 
 
