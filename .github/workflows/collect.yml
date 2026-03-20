@@ -2,12 +2,12 @@ name: 매물 수집
 
 on:
   schedule:
-    - cron: '0 22 * * *'   # 매일 오전 7시 KST (UTC 22:00 전날)
+    - cron: '0 0 * * *'    # 매일 오전 9시 KST (UTC 00:00)
   workflow_dispatch:         # 수동 실행 허용
 
 jobs:
   collect:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     permissions:
       contents: write        # 로그 파일 커밋을 위해 필요
 
