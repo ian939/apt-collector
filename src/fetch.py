@@ -147,7 +147,14 @@ def fetch_all_regions(regions: list[dict], max_price_10k: int) -> tuple[dict, di
 
                     data = page.evaluate(f"""
                         async () => {{
-                            const r = await fetch('{url}');
+                            const auth = window.__capturedAuth || '';
+                            const r = await fetch('{url}', {{
+                                headers: {{
+                                    'Authorization': auth,
+                                    'Accept': 'application/json, text/plain, */*',
+                                    'Referer': 'https://new.land.naver.com/'
+                                }}
+                            }});
                             if (!r.ok) throw new Error('HTTP ' + r.status);
                             return r.json();
                         }}
