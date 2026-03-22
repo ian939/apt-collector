@@ -15,41 +15,25 @@ import time
 import requests
 
 BASE_URL = "https://new.land.naver.com/api/articles"
-# 강남구 목록 페이지 — 로드 시 api/articles 요청이 자동 발생
+# 강남구 아파트 매매 목록 — 로드 시 api/articles 요청 자동 발생
 NAVER_LISTING_URL = (
     "https://new.land.naver.com/complexes"
-    "?ms=37.4979,127.0276,14"
-    "&a=APT&b=A1"
+    "?ms=37.4979,127.0276,13"
+    "&a=APT"
+    "&b=A1"
     "&e=RETAIL"
+    "&h=1168010300"  # 강남구 법정동코드
 )
 
 
 def _get_auth_token_via_playwright() -> tuple[str, str]:
     """
-    Playwright headed 브라우저로 Naver를 방문해
+    Playwright headed 브라우저로 Naver 목록 페이지를 방문해
+    페이지가 발생시키는 api/articles 요청을 기다려
     (authorization_header, cookie_header) 를 반환한다.
     실패 시 ("", "") 반환.
     """
     from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
-
-    auth_token = ""
-    cookie_str = ""
-    captured = {"done": False}
-
-    def handle_request(request):
-        if captured["done"]:
-            return
-        if "api/articles" in request.url or "api/pre-sale" in request.url:
-            hdrs = request.headers
-            auth = hdrs.get("authorization", "")
-            cookie = hdrs.get("cookie", "")
-            if auth:
-                auth_token_ref.append(auth)
-                cookie_ref.append(cookie)
-                captured["done"] = True
-
-    auth_token_ref = []
-    cookie_ref = []
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=False)
@@ -61,28 +45,27 @@ def _get_auth_token_via_playwright() -> tuple[str, str]:
             )
         )
         page = context.new_page()
-        page.on("request", handle_request)
 
-        print("[fetch] Playwright: 페이지 로딩 중 (토큰 대기)...")
+        print("[fetch] Playwright: 목록 페이지 로딩 중 (api/articles 요청 대기)...")
         try:
-            page.goto(NAVER_LISTING_URL, wait_until="domcontentloaded", timeout=25000)
+            with page.expect_request(
+                lambda r: "api/articles" in r.url and r.headers.get("authorization", ""),
+                timeout=25000,
+            ) as req_info:
+                page.goto(NAVER_LISTING_URL, wait_until="domcontentloaded", timeout=20000)
+
+            req = req_info.value
+            auth_token = req.headers.get("authorization", "")
+            cookie_str = req.headers.get("cookie", "")
+            print(f"[fetch] 토큰 획득 성공: {auth_token[:40]}...")
         except PWTimeout:
-            print("[fetch] Playwright: 페이지 로딩 타임아웃")
-
-        # 토큰 캡처될 때까지 최대 15초 대기
-        for _ in range(30):
-            if captured["done"]:
-                break
-            time.sleep(0.5)
-
-        browser.close()
-
-    if auth_token_ref:
-        auth_token = auth_token_ref[0]
-        cookie_str = cookie_ref[0] if cookie_ref else ""
-        print(f"[fetch] 토큰 획득 성공: {auth_token[:40]}...")
-    else:
-        print("[fetch] 토큰 획득 실패 — 환경변수 쿠키로 폴백")
+            print("[fetch] api/articles 요청 미감지 (25초 타임아웃) — 폴백")
+            auth_token, cookie_str = "", ""
+        except Exception as e:
+            print(f"[fetch] Playwright 오류: {e}")
+            auth_token, cookie_str = "", ""
+        finally:
+            browser.close()
 
     return auth_token, cookie_str
 
