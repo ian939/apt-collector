@@ -27,30 +27,41 @@ NAVER_LISTING_URL = (
 
 
 _INTERCEPT_SCRIPT = """
+    // 봇 감지 우회
+    Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+
     window.__capturedAuth = null;
 
-    // fetch 오버라이드
-    const _origFetch = window.fetch;
-    window.fetch = async function(url, opts) {
-        try {
-            const hdrs = opts && opts.headers ? opts.headers : {};
-            const auth = hdrs['authorization'] || hdrs['Authorization'];
-            if (auth && String(url).includes('/api/')) {
-                window.__capturedAuth = auth;
-            }
-        } catch(e) {}
-        return _origFetch.apply(this, arguments);
-    };
+    // fetch: setter를 가로채어 페이지 JS가 fetch를 교체해도 훅 유지
+    let _currentFetch = window.fetch;
+    function _wrapFetch(fn) {
+        return function(url, opts) {
+            try {
+                const h = (opts && opts.headers) ? opts.headers : {};
+                const auth = h['authorization'] || h['Authorization'];
+                if (auth && String(url).includes('/api/')) {
+                    window.__capturedAuth = auth;
+                }
+            } catch(e) {}
+            return fn.apply(this, arguments);
+        };
+    }
+    Object.defineProperty(window, 'fetch', {
+        configurable: true,
+        enumerable: true,
+        get: () => _currentFetch,
+        set: (newFn) => { _currentFetch = _wrapFetch(newFn); }
+    });
+    _currentFetch = _wrapFetch(window.fetch);
 
-    // XMLHttpRequest 오버라이드
-    const _origOpen = XMLHttpRequest.prototype.open;
+    // XMLHttpRequest: prototype 교체 불가능하므로 안전하게 유지
     const _origSetHeader = XMLHttpRequest.prototype.setRequestHeader;
-    XMLHttpRequest.prototype.open = function(method, url) {
-        this.__url = url;
-        return _origOpen.apply(this, arguments);
+    const _origOpen = XMLHttpRequest.prototype.open;
+    XMLHttpRequest.prototype.open = function(m, url) {
+        this.__xhrUrl = url; return _origOpen.apply(this, arguments);
     };
     XMLHttpRequest.prototype.setRequestHeader = function(name, value) {
-        if (name.toLowerCase() === 'authorization' && String(this.__url || '').includes('/api/')) {
+        if (name.toLowerCase() === 'authorization' && String(this.__xhrUrl||'').includes('/api/')) {
             window.__capturedAuth = value;
         }
         return _origSetHeader.apply(this, arguments);
@@ -67,7 +78,10 @@ def _get_auth_token_via_playwright() -> tuple[str, str]:
     from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=False)
+        browser = p.chromium.launch(
+            headless=False,
+            args=["--disable-blink-features=AutomationControlled"],
+        )
         context = browser.new_context(
             user_agent=(
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
