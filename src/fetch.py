@@ -176,7 +176,10 @@ def fetch_all_regions(regions: list[dict], max_price_10k: int) -> tuple[dict, di
                         break
 
                     page_num += 1
-                    time.sleep(random.uniform(1.0, 3.0))
+                    if page_num > 50:  # 안전장치: 최대 50페이지
+                        print(f"[fetch] {name}: 50페이지 한도 도달, 수집 중단")
+                        break
+                    time.sleep(random.uniform(1.0, 2.0))
 
                 results[name] = all_articles
                 print(f"[fetch] {name}: {len(all_articles)}건 수집")

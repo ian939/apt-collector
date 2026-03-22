@@ -27,7 +27,14 @@ def _get_room_count(article: dict) -> int:
 
 
 def apply_room_filter(articles: list[dict], min_rooms: int) -> list[dict]:
-    """방 개수 조건 미충족 매물 제거."""
+    """방 개수 조건 미충족 매물 제거. roomCount 필드 없으면 필터 스킵."""
+    if not articles:
+        return articles
+    # 전체 중 roomCount가 하나라도 있는지 확인
+    has_room_field = any(a.get("roomCount") for a in articles)
+    if not has_room_field:
+        print(f"[filter] roomCount 필드 없음 — 방 개수 필터 스킵 (전체 {len(articles)}건 통과)")
+        return articles
     return [a for a in articles if _get_room_count(a) >= min_rooms]
 
 

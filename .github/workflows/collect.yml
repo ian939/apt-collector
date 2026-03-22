@@ -37,6 +37,7 @@ jobs:
           PYTHONUTF8: 1
 
       - name: 로그 커밋 및 푸시
+        shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
