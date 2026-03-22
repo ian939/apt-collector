@@ -110,7 +110,7 @@ def fetch_all_regions(regions: list[dict], max_price_10k: int) -> tuple[dict, di
         print("[fetch] Playwright: 페이지 로딩 중...")
         try:
             page.goto(NAVER_LISTING_URL, wait_until="domcontentloaded", timeout=25000)
-            page.wait_for_timeout(8000)
+            page.wait_for_timeout(5000)
         except PWTimeout:
             print("[fetch] 페이지 로딩 타임아웃 (계속)")
         except Exception as e:
