@@ -155,8 +155,9 @@ def fetch_all_regions(regions: list[dict], max_price_10k: int) -> tuple[dict, di
                                     'Referer': 'https://new.land.naver.com/'
                                 }}
                             }});
-                            if (!r.ok) throw new Error('HTTP ' + r.status);
-                            return r.json();
+                            const text = await r.text();
+                            if (!r.ok) throw new Error('HTTP ' + r.status + ': ' + text.substring(0, 300));
+                            return JSON.parse(text);
                         }}
                     """)
 
