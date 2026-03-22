@@ -140,11 +140,13 @@ def main() -> None:
     # ──────────────────────────────────────────
     # Step 5: 초품아 판별 (LLM)
     # ──────────────────────────────────────────
-    logger.info(f"Step 5: 초품아 판별 LLM 분석 ({len(filtered)}건 → 배치 처리)")
+    # LLM 분석은 급매 후보에만 적용 (전체 분석 시 비용/시간 과다)
+    urgent_articles = [a for a in filtered if a.get("급매")]
+    logger.info(f"Step 5: 초품아 판별 LLM 분석 ({len(urgent_articles)}건 급매 후보 → 배치 처리)")
     analysis_results = []
-    if filtered:
+    if urgent_articles:
         try:
-            analysis_results = analyze_listings(filtered)
+            analysis_results = analyze_listings(urgent_articles)
             chopo_count = sum(1 for r in analysis_results if r.get("초품아") is True)
             uncertain_count = sum(1 for r in analysis_results if r.get("초품아") == "불확실")
             logger.info(f"  초품아: {chopo_count}건, 불확실: {uncertain_count}건")
