@@ -79,25 +79,42 @@ def _get_auth_token_via_playwright() -> tuple[str, str]:
         # 페이지 JS 실행 전에 인터셉터 주입
         page.add_init_script(_INTERCEPT_SCRIPT)
 
+        # 환경변수 쿠키를 Playwright 컨텍스트에 주입 (Naver 404 방지)
+        env_cookie = os.environ.get("NAVER_COOKIES", "")
+        if env_cookie:
+            cookie_list = []
+            for part in env_cookie.split("; "):
+                if "=" in part:
+                    name, val = part.split("=", 1)
+                    for domain in ["new.land.naver.com", ".naver.com"]:
+                        cookie_list.append({
+                            "name": name.strip(),
+                            "value": val.strip(),
+                            "domain": domain,
+                            "path": "/",
+                        })
+            context.add_cookies(cookie_list)
+            print(f"[fetch] 쿠키 {len(env_cookie)//2}자 주입 완료")
+
         print("[fetch] Playwright: 페이지 로딩 중 (토큰 후킹)...")
         try:
-            page.goto(NAVER_LISTING_URL, wait_until="networkidle", timeout=30000)
+            page.goto(NAVER_LISTING_URL, wait_until="domcontentloaded", timeout=25000)
+            page.wait_for_timeout(8000)  # JS 토큰 초기화 대기
         except PWTimeout:
-            print("[fetch] Playwright: networkidle 타임아웃 (계속 진행)")
+            print("[fetch] Playwright: 로딩 타임아웃 (계속 진행)")
+        except Exception as e:
+            print(f"[fetch] Playwright goto 오류: {e}")
 
-        # 토큰이 캡처될 때까지 최대 10초 추가 대기
-        for _ in range(20):
-            token = page.evaluate("() => window.__capturedAuth")
-            if token:
-                break
-            time.sleep(0.5)
-
-        auth_token = page.evaluate("() => window.__capturedAuth || ''")
-        # 쿠키는 context에서 직접 읽기
-        cookies = context.cookies("https://new.land.naver.com")
-        cookie_str = "; ".join(f"{c['name']}={c['value']}" for c in cookies)
-
-        browser.close()
+        auth_token = ""
+        try:
+            auth_token = page.evaluate("() => window.__capturedAuth || ''") or ""
+            cookies = context.cookies("https://new.land.naver.com")
+            cookie_str = "; ".join(f"{c['name']}={c['value']}" for c in cookies) or env_cookie
+        except Exception as e:
+            print(f"[fetch] 토큰 읽기 오류: {e}")
+            cookie_str = env_cookie
+        finally:
+            browser.close()
 
     if auth_token:
         print(f"[fetch] 토큰 획득 성공: {auth_token[:40]}...")
