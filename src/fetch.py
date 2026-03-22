@@ -26,11 +26,42 @@ NAVER_LISTING_URL = (
 )
 
 
+_INTERCEPT_SCRIPT = """
+    window.__capturedAuth = null;
+
+    // fetch 오버라이드
+    const _origFetch = window.fetch;
+    window.fetch = async function(url, opts) {
+        try {
+            const hdrs = opts && opts.headers ? opts.headers : {};
+            const auth = hdrs['authorization'] || hdrs['Authorization'];
+            if (auth && String(url).includes('/api/')) {
+                window.__capturedAuth = auth;
+            }
+        } catch(e) {}
+        return _origFetch.apply(this, arguments);
+    };
+
+    // XMLHttpRequest 오버라이드
+    const _origOpen = XMLHttpRequest.prototype.open;
+    const _origSetHeader = XMLHttpRequest.prototype.setRequestHeader;
+    XMLHttpRequest.prototype.open = function(method, url) {
+        this.__url = url;
+        return _origOpen.apply(this, arguments);
+    };
+    XMLHttpRequest.prototype.setRequestHeader = function(name, value) {
+        if (name.toLowerCase() === 'authorization' && String(this.__url || '').includes('/api/')) {
+            window.__capturedAuth = value;
+        }
+        return _origSetHeader.apply(this, arguments);
+    };
+"""
+
+
 def _get_auth_token_via_playwright() -> tuple[str, str]:
     """
-    Playwright headed 브라우저로 Naver 목록 페이지를 방문해
-    페이지가 발생시키는 api/articles 요청을 기다려
-    (authorization_header, cookie_header) 를 반환한다.
+    Playwright headed 브라우저로 Naver를 방문해 fetch/XHR을 후킹,
+    Authorization 토큰을 캡처해 반환한다.
     실패 시 ("", "") 반환.
     """
     from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
@@ -45,27 +76,33 @@ def _get_auth_token_via_playwright() -> tuple[str, str]:
             )
         )
         page = context.new_page()
+        # 페이지 JS 실행 전에 인터셉터 주입
+        page.add_init_script(_INTERCEPT_SCRIPT)
 
-        print("[fetch] Playwright: 목록 페이지 로딩 중 (api/articles 요청 대기)...")
+        print("[fetch] Playwright: 페이지 로딩 중 (토큰 후킹)...")
         try:
-            with page.expect_request(
-                lambda r: "api/articles" in r.url and r.headers.get("authorization", ""),
-                timeout=25000,
-            ) as req_info:
-                page.goto(NAVER_LISTING_URL, wait_until="domcontentloaded", timeout=20000)
-
-            req = req_info.value
-            auth_token = req.headers.get("authorization", "")
-            cookie_str = req.headers.get("cookie", "")
-            print(f"[fetch] 토큰 획득 성공: {auth_token[:40]}...")
+            page.goto(NAVER_LISTING_URL, wait_until="networkidle", timeout=30000)
         except PWTimeout:
-            print("[fetch] api/articles 요청 미감지 (25초 타임아웃) — 폴백")
-            auth_token, cookie_str = "", ""
-        except Exception as e:
-            print(f"[fetch] Playwright 오류: {e}")
-            auth_token, cookie_str = "", ""
-        finally:
-            browser.close()
+            print("[fetch] Playwright: networkidle 타임아웃 (계속 진행)")
+
+        # 토큰이 캡처될 때까지 최대 10초 추가 대기
+        for _ in range(20):
+            token = page.evaluate("() => window.__capturedAuth")
+            if token:
+                break
+            time.sleep(0.5)
+
+        auth_token = page.evaluate("() => window.__capturedAuth || ''")
+        # 쿠키는 context에서 직접 읽기
+        cookies = context.cookies("https://new.land.naver.com")
+        cookie_str = "; ".join(f"{c['name']}={c['value']}" for c in cookies)
+
+        browser.close()
+
+    if auth_token:
+        print(f"[fetch] 토큰 획득 성공: {auth_token[:40]}...")
+    else:
+        print("[fetch] 토큰 획득 실패 — 환경변수 쿠키로 폴백")
 
     return auth_token, cookie_str
 
