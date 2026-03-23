@@ -272,21 +272,19 @@ def enrich_with_realprices(articles: list[dict], auth_token: str) -> list[dict]:
                 if not detail:
                     continue
 
-                # complexNo 추출 (API 구조에 따라 위치가 다를 수 있음)
-                complex_no = (
-                    (detail.get("articleDetail") or {}).get("complexNo")
-                    or (detail.get("articleAddition") or {}).get("complexNo")
-                    or detail.get("complexNo", "")
-                )
-                if complex_no:
-                    article["complexNo"] = str(complex_no)
+                # hscpNo(단지번호)와 ptpNo(평형번호) 추출
+                article_detail = detail.get("articleDetail") or {}
+                hscp_no = str(article_detail.get("hscpNo", ""))
+                ptp_no = str(article_detail.get("ptpNo", ""))
 
-                    area_name = article.get("areaName", "")
+                if hscp_no:
+                    article["complexNo"] = hscp_no  # URL 생성에 사용
+
                     prices = page.evaluate(f"""
                         async () => {{
                             const auth = window.__capturedAuth || '';
                             const r = await fetch(
-                                'https://new.land.naver.com/api/complexes/{complex_no}/real-prices?tradeType=A1&year={year}&areaNo={area_name}&type=list',
+                                'https://new.land.naver.com/api/complexes/{hscp_no}/real-prices?tradeType=A1&year={year}&areaNo={ptp_no}&type=list',
                                 {{headers: {{'Authorization': auth, 'Referer': 'https://new.land.naver.com/', 'Accept': 'application/json'}}}}
                             );
                             return r.ok ? await r.json() : null;

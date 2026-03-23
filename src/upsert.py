@@ -158,6 +158,10 @@ def upsert_listings(
         dupes = existing[existing["매물ID"].duplicated()]["매물ID"].tolist()
         raise RuntimeError(f"CSV upsert 후 중복 매물 ID 발견: {dupes}")
 
+    # Windows에서 git 커밋 후 읽기전용이 될 수 있으므로 쓰기 권한 강제 설정
+    if os.path.exists(csv_path):
+        import stat
+        os.chmod(csv_path, stat.S_IWRITE | stat.S_IREAD)
     existing.to_csv(csv_path, index=False, encoding="utf-8-sig")
 
     return {
