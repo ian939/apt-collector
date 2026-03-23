@@ -5,6 +5,7 @@ LLM 기반 초품아·다주택자 판별 모듈 (anthropic SDK).
 
 import json
 import os
+import time
 import anthropic
 
 BATCH_SIZE = 15
@@ -98,28 +99,39 @@ def analyze_listings(listings: list[dict]) -> list[dict]:
         batch_input = _prepare_batch_input(batch)
         user_prompt = _build_user_prompt(batch_input)
 
-        try:
-            response = client.messages.create(
-                model=MODEL,
-                max_tokens=4096,
-                system=SYSTEM_PROMPT,
-                messages=[{"role": "user", "content": user_prompt}],
-            )
+        last_err = None
+        for attempt in range(3):
+            try:
+                response = client.messages.create(
+                    model=MODEL,
+                    max_tokens=4096,
+                    system=SYSTEM_PROMPT,
+                    messages=[{"role": "user", "content": user_prompt}],
+                )
+                text = next(
+                    (b.text for b in response.content if b.type == "text"), ""
+                )
+                batch_results = _parse_response(text)
+                results.extend(batch_results)
+                last_err = None
+                break
+            except anthropic.APIStatusError as e:
+                if e.status_code == 529 and attempt < 2:
+                    time.sleep(20 * (attempt + 1))  # 20s, 40s
+                    continue
+                last_err = e
+                break
+            except (ValueError, json.JSONDecodeError) as e:
+                last_err = e
+                break
 
-            text = next(
-                (b.text for b in response.content if b.type == "text"), ""
-            )
-            batch_results = _parse_response(text)
-            results.extend(batch_results)
-
-        except (ValueError, json.JSONDecodeError) as e:
-            # 파싱 실패 시 해당 배치 매물 전부 '불확실' 처리
+        if last_err is not None:
             for item in batch_input:
                 results.append({
                     "id": item["id"],
                     "초품아": "불확실",
                     "다주택자_의심": False,
-                    "판별_사유": f"LLM 응답 파싱 실패: {e}",
+                    "판별_사유": f"LLM 오류: {last_err}",
                 })
 
     return results
