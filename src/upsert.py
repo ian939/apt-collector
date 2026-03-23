@@ -4,9 +4,24 @@ CSV upsert 모듈.
 """
 
 import os
+import re
 from datetime import datetime
 
 import pandas as pd
+
+
+def _parse_price(raw) -> int:
+    """만원 단위 호가 파싱. '8억5,000', '15억', '5000' 등 모두 지원."""
+    if not raw:
+        return 0
+    s = str(raw).replace(",", "").replace(" ", "")
+    if s.isdigit():
+        return int(s)
+    m = re.match(r'(\d+)억(\d*)', s)
+    if m:
+        return int(m.group(1)) * 10000 + (int(m.group(2)) if m.group(2) else 0)
+    nums = re.findall(r'\d+', s)
+    return int(nums[0]) if nums else 0
 
 CSV_COLUMNS = [
     "매물ID", "수집일자", "지역구", "단지명", "동호수",
@@ -15,7 +30,11 @@ CSV_COLUMNS = [
 ]
 
 
-def _build_url(article_no: str) -> str:
+def _build_url(article: dict) -> str:
+    complex_no = article.get("complexNo", "")
+    article_no = str(article.get("articleNo", ""))
+    if complex_no:
+        return f"https://new.land.naver.com/complexes/{complex_no}?articleNo={article_no}"
     return f"https://new.land.naver.com/articles/{article_no}"
 
 
@@ -25,12 +44,8 @@ def _to_row(article: dict, analysis: dict) -> dict:
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     today = datetime.now().strftime("%Y-%m-%d")
 
-    # 호가: API는 만원 단위 문자열 또는 정수로 제공
     price_raw = article.get("dealOrWarrantPrc", "") or article.get("prc", "")
-    try:
-        price = int(str(price_raw).replace(",", "").replace(" ", ""))
-    except (ValueError, TypeError):
-        price = 0
+    price = _parse_price(price_raw)
 
     # 면적
     area = article.get("area1", "") or article.get("areaName", "")
@@ -52,7 +67,7 @@ def _to_row(article: dict, analysis: dict) -> dict:
         "다주택자_의심": analysis.get("다주택자_의심", False) or article.get("다주택자_의심", False),
         "판별_사유": analysis.get("판별_사유", ""),
         "매물_설명": article.get("articleFeatureDesc", ""),
-        "매물_URL": _build_url(article_no),
+        "매물_URL": _build_url(article),
         "상태": "활성",
         "최종_업데이트": now,
     }

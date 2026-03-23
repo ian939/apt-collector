@@ -26,7 +26,7 @@ from src.fetch import fetch_all_regions, save_raw
 from src.filter import run_filter
 from src.analyzer import analyze_listings
 from src.upsert import upsert_listings
-from src.notify import send_urgent_alerts, notify_complete, notify_error
+from src.notify import notify_summary, notify_error
 from src.log import RunLogger
 
 # 로컬 개발 시 .env 파일 로드
@@ -156,12 +156,21 @@ def main() -> None:
     # 분석 결과를 article_no → 결과 딕셔너리로 매핑
     analysis_map = {str(r["id"]): r for r in analysis_results}
 
+    # 급매+초품아 동시 충족 매물만 CSV 저장 대상
+    chopo_urgent_articles = [
+        a for a in filtered
+        if a.get("급매")
+        and analysis_map.get(str(a.get("articleNo", "")), {}).get("초품아") is True
+    ]
+    chopo_urgent_count = len(chopo_urgent_articles)
+    logger.info(f"  급매+초품아 동시 충족: {chopo_urgent_count}건 → CSV 저장")
+
     # ──────────────────────────────────────────
     # Step 6: CSV upsert
     # ──────────────────────────────────────────
     logger.info("Step 6: CSV upsert")
     try:
-        upsert_stats = upsert_listings(filtered, analysis_map, CSV_PATH)
+        upsert_stats = upsert_listings(chopo_urgent_articles, analysis_map, CSV_PATH)
         logger.info(
             f"  신규: {upsert_stats['new']}건, 갱신: {upsert_stats['updated']}건, "
             f"전체: {upsert_stats['total']}건"
@@ -174,32 +183,18 @@ def main() -> None:
         sys.exit(1)
 
     # ──────────────────────────────────────────
-    # Step 7: Slack 알림
+    # Step 7: Slack 요약 알림 (1건)
     # ──────────────────────────────────────────
-    logger.info("Step 7: Slack 알림 전송")
+    logger.info("Step 7: Slack 요약 알림 전송")
 
-    # 급매/다주택자 매물에 upsert 결과 병합하여 Slack 포맷용 필드 추가
-    alert_targets = []
-    for article in filtered:
-        if not (article.get("급매") or article.get("다주택자_의심")):
-            continue
-        article_no = str(article.get("articleNo", ""))
-        analysis = analysis_map.get(article_no, {})
-        alert_targets.append({
-            **article,
-            "호가": article.get("dealOrWarrantPrc") or article.get("prc", 0),
-            "면적": article.get("area1") or article.get("areaName", ""),
-            "단지명": article.get("articleName", ""),
-            "지역구": article.get("_region", ""),
-            "매물_URL": f"https://new.land.naver.com/articles/{article_no}",
-        })
-
-    sent_count = send_urgent_alerts(alert_targets)
-    logger.info(f"  급매 알림 전송: {sent_count}건")
-
-    # 완료 요약 알림
-    notify_complete(total_raw)
-    logger.info(f"  [완료] 알림 전송 완료")
+    notify_summary(
+        total_raw=total_raw,
+        new_count=upsert_stats["new"],
+        updated_count=upsert_stats["updated"],
+        urgent_count=urgent_count,
+        chopo_urgent_count=chopo_urgent_count,
+    )
+    logger.info("  요약 알림 전송 완료")
 
     # ──────────────────────────────────────────
     # Step 8: 로그 저장 + 임시 파일 정리
