@@ -159,6 +159,9 @@ def upsert_listings(
             existing.at[idx, "다주택자_의심"] = new_row["다주택자_의심"]
             existing.at[idx, "판별_사유"] = new_row["판별_사유"]
             existing.at[idx, "확인매물"] = new_row["확인매물"]
+            if new_row.get("실거래가"):
+                existing.at[idx, "실거래가"] = new_row["실거래가"]
+                existing.at[idx, "실거래_날짜"] = new_row["실거래_날짜"]
             updated_count += 1
         else:
             rows_to_upsert.append(new_row)
