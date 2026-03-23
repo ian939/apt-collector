@@ -32,13 +32,17 @@ CSV_COLUMNS = [
 
 def _build_url(article: dict) -> str:
     article_no = str(article.get("articleNo", ""))
+    complex_no = article.get("complexNo", "")
     lat = article.get("latitude", "")
     lng = article.get("longitude", "")
+    if complex_no:
+        base = f"https://new.land.naver.com/complexes/{complex_no}?articleNo={article_no}"
+        if lat and lng:
+            base += f"&ms={lat},{lng},17"
+        return base
+    # complexNo 없을 때 좌표 기반 fallback
     if lat and lng:
-        return (
-            f"https://new.land.naver.com/articles/{article_no}"
-            f"?ms={lat},{lng},17&a=APT&b=A1"
-        )
+        return f"https://new.land.naver.com/?ms={lat},{lng},17&a=APT&b=A1"
     return f"https://new.land.naver.com/articles/{article_no}"
 
 

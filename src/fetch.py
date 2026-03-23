@@ -181,8 +181,36 @@ def fetch_all_regions(regions: list[dict], max_price_10k: int) -> tuple[dict, di
                         break
                     time.sleep(random.uniform(1.0, 2.0))
 
+                # 단지명 → complexNo 조회 (URL 생성용)
+                complex_map = {}
+                unique_names = list({a.get("articleName", "") for a in all_articles if a.get("articleName")})
+                for cname in unique_names:
+                    try:
+                        cdata = page.evaluate(f"""
+                            async () => {{
+                                const auth = window.__capturedAuth || '';
+                                const r = await fetch(
+                                    'https://new.land.naver.com/api/complexes?keyword={cname}&realEstateType=APT',
+                                    {{ headers: {{ 'Authorization': auth, 'Referer': 'https://new.land.naver.com/' }} }}
+                                );
+                                return r.ok ? await r.json() : null;
+                            }}
+                        """)
+                        if cdata and cdata.get("complexList"):
+                            for c in cdata["complexList"]:
+                                if c.get("complexName") == cname:
+                                    complex_map[cname] = str(c["complexNo"])
+                                    break
+                    except Exception:
+                        pass
+
+                for article in all_articles:
+                    cno = complex_map.get(article.get("articleName", ""))
+                    if cno:
+                        article["complexNo"] = cno
+
                 results[name] = all_articles
-                print(f"[fetch] {name}: {len(all_articles)}건 수집")
+                print(f"[fetch] {name}: {len(all_articles)}건 수집, complexNo 매핑: {len(complex_map)}건")
 
             except Exception as e:
                 errors[name] = str(e)
