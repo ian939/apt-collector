@@ -84,6 +84,16 @@ def upsert_listings(
 
     existing["매물ID"] = existing["매물ID"].astype(str)
 
+    # 입력 매물 중복 제거 (같은 articleNo가 여러 페이지에 걸쳐 중복 수집될 수 있음)
+    seen = set()
+    deduped = []
+    for a in articles:
+        aid = str(a.get("articleNo", ""))
+        if aid and aid not in seen:
+            seen.add(aid)
+            deduped.append(a)
+    articles = deduped
+
     new_count = 0
     updated_count = 0
     rows_to_upsert = []
