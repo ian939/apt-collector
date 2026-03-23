@@ -35,7 +35,7 @@ load_dotenv()
 OUTPUT_DIR = "output"
 TEMP_DIR = os.path.join(OUTPUT_DIR, "temp")
 LOG_DIR = os.path.join(OUTPUT_DIR, "logs")
-CSV_PATH = os.path.join(OUTPUT_DIR, "listings.csv")
+CSV_PATH = os.environ.get("CSV_PATH", os.path.join(OUTPUT_DIR, "listings.csv"))
 CONFIG_PATH = "config.json"
 
 

@@ -5,9 +5,6 @@ CSV upsert 모듈.
 
 import os
 import re
-import shutil
-import stat
-import tempfile
 from datetime import datetime
 
 import pandas as pd
@@ -161,16 +158,7 @@ def upsert_listings(
         dupes = existing[existing["매물ID"].duplicated()]["매물ID"].tolist()
         raise RuntimeError(f"CSV upsert 후 중복 매물 ID 발견: {dupes}")
 
-    # temp 파일에 쓴 후 shutil.copy2로 덮어쓰기 (삭제 없이 내용만 교체)
-    dir_name = os.path.dirname(os.path.abspath(csv_path))
-    tmp_fd, tmp_path = tempfile.mkstemp(suffix=".csv", dir=dir_name)
-    try:
-        os.close(tmp_fd)
-        existing.to_csv(tmp_path, index=False, encoding="utf-8-sig")
-        shutil.copy2(tmp_path, csv_path)
-    finally:
-        if os.path.exists(tmp_path):
-            os.remove(tmp_path)
+    existing.to_csv(csv_path, index=False, encoding="utf-8-sig")
 
     return {
         "new": new_count,

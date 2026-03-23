@@ -37,6 +37,7 @@ jobs:
           NAVER_COOKIES: ${{ secrets.NAVER_COOKIES }}
           PYTHONIOENCODING: utf-8
           PYTHONUTF8: 1
+          CSV_PATH: C:\apt-data\listings.csv
 
       - name: 결과 커밋 및 푸시
         shell: powershell
