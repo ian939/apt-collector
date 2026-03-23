@@ -22,7 +22,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from src.fetch import fetch_all_regions, save_raw
+from src.fetch import fetch_all_regions, save_raw, enrich_with_realprices
 from src.filter import run_filter
 from src.analyzer import analyze_listings
 from src.upsert import upsert_listings
@@ -95,7 +95,7 @@ def main() -> None:
     # ──────────────────────────────────────────
     logger.info("Step 2: 지역구별 매물 수집")
     try:
-        articles_by_region, fetch_errors = fetch_all_regions(regions, max_price_10k)
+        articles_by_region, fetch_errors, auth_token = fetch_all_regions(regions, max_price_10k)
 
         for region_name, err in fetch_errors.items():
             logger.warning(f"  {region_name} 수집 실패 (스킵): {err}")
@@ -164,6 +164,14 @@ def main() -> None:
     ]
     chopo_urgent_count = len(chopo_urgent_articles)
     logger.info(f"  급매+초품아 동시 충족: {chopo_urgent_count}건 → CSV 저장")
+
+    # 실거래가 보강 (최종 매물에 대해서만 API 호출)
+    if chopo_urgent_articles and auth_token:
+        logger.info(f"  실거래가 조회 중 ({chopo_urgent_count}건)...")
+        try:
+            chopo_urgent_articles = enrich_with_realprices(chopo_urgent_articles, auth_token)
+        except Exception as e:
+            logger.warning(f"  실거래가 조회 실패 (계속 진행): {e}")
 
     # ──────────────────────────────────────────
     # Step 6: CSV upsert

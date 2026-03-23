@@ -66,15 +66,16 @@ def fetch_all_regions(regions: list[dict], max_price_10k: int) -> tuple[dict, di
     동일 컨텍스트에서 fetch()로 5개 구 순차 수집.
 
     Returns:
-        ({"강남구": [...], ...}, {"실패구": "에러메시지", ...})
+        ({"강남구": [...], ...}, {"실패구": "에러메시지", ...}, auth_token)
     """
     try:
         from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
     except ImportError:
-        return {}, {"전체": "playwright 미설치"}
+        return {}, {"전체": "playwright 미설치"}, ""
 
     results = {}
     errors = {}
+    _auth_token = ""
 
     with sync_playwright() as p:
         browser = p.chromium.launch(
@@ -116,16 +117,17 @@ def fetch_all_regions(regions: list[dict], max_price_10k: int) -> tuple[dict, di
         except Exception as e:
             print(f"[fetch] goto 오류: {e}")
 
-        auth_token = ""
         try:
-            auth_token = page.evaluate("() => window.__capturedAuth || ''") or ""
+            _auth_token = page.evaluate("() => window.__capturedAuth || ''") or ""
         except Exception:
             pass
 
-        if auth_token:
-            print(f"[fetch] 토큰 획득 성공: {auth_token[:40]}...")
+        if _auth_token:
+            print(f"[fetch] 토큰 획득 성공: {_auth_token[:40]}...")
         else:
             print("[fetch] 토큰 미획득 — 쿠키만으로 시도")
+
+        auth_token = _auth_token  # 로컬 참조용
 
         # 같은 Playwright 컨텍스트에서 API 호출
         for i, region in enumerate(regions):
@@ -193,7 +195,136 @@ def fetch_all_regions(regions: list[dict], max_price_10k: int) -> tuple[dict, di
 
         browser.close()
 
-    return results, errors
+    return results, errors, _auth_token
+
+
+def enrich_with_realprices(articles: list[dict], auth_token: str) -> list[dict]:
+    """
+    최종 매물(40-50건)에 대해 실거래가·날짜를 추가한다.
+    article detail API → complexNo → complex price history API 순으로 호출.
+    """
+    if not articles or not auth_token:
+        return articles
+
+    try:
+        from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
+    except ImportError:
+        return articles
+
+    from datetime import datetime
+    year = datetime.now().year
+    sample_detail_saved = False
+    sample_prices_saved = False
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(
+            headless=False,
+            args=["--disable-blink-features=AutomationControlled"],
+        )
+        context = browser.new_context(
+            user_agent=(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/122.0.0.0 Safari/537.36"
+            )
+        )
+        env_cookie = os.environ.get("NAVER_COOKIES", "")
+        if env_cookie:
+            cookie_list = []
+            for part in env_cookie.split("; "):
+                if "=" in part:
+                    cname, cval = part.split("=", 1)
+                    for domain in ["new.land.naver.com", ".naver.com"]:
+                        cookie_list.append({"name": cname.strip(), "value": cval.strip(), "domain": domain, "path": "/"})
+            context.add_cookies(cookie_list)
+
+        page = context.new_page()
+        page.add_init_script(f"window.__capturedAuth = {json.dumps(auth_token)};")
+        try:
+            page.goto(NAVER_LISTING_URL, wait_until="domcontentloaded", timeout=20000)
+            page.wait_for_timeout(2000)
+        except Exception:
+            pass
+
+        print(f"[fetch] 실거래가 조회 시작: {len(articles)}건")
+
+        for article in articles:
+            ano = article.get("articleNo", "")
+            if not ano:
+                continue
+            try:
+                detail = page.evaluate(f"""
+                    async () => {{
+                        const auth = window.__capturedAuth || '';
+                        const r = await fetch('https://new.land.naver.com/api/articles/{ano}', {{
+                            headers: {{'Authorization': auth, 'Referer': 'https://new.land.naver.com/', 'Accept': 'application/json'}}
+                        }});
+                        return r.ok ? await r.json() : null;
+                    }}
+                """)
+
+                if not sample_detail_saved and detail:
+                    os.makedirs("output", exist_ok=True)
+                    with open("output/sample_detail.json", "w", encoding="utf-8") as f:
+                        json.dump(detail, f, ensure_ascii=False, indent=2)
+                    sample_detail_saved = True
+
+                if not detail:
+                    continue
+
+                # complexNo 추출 (API 구조에 따라 위치가 다를 수 있음)
+                complex_no = (
+                    (detail.get("articleDetail") or {}).get("complexNo")
+                    or (detail.get("articleAddition") or {}).get("complexNo")
+                    or detail.get("complexNo", "")
+                )
+                if complex_no:
+                    article["complexNo"] = str(complex_no)
+
+                    area_name = article.get("areaName", "")
+                    prices = page.evaluate(f"""
+                        async () => {{
+                            const auth = window.__capturedAuth || '';
+                            const r = await fetch(
+                                'https://new.land.naver.com/api/complexes/{complex_no}/real-prices?tradeType=A1&year={year}&areaNo={area_name}&type=list',
+                                {{headers: {{'Authorization': auth, 'Referer': 'https://new.land.naver.com/', 'Accept': 'application/json'}}}}
+                            );
+                            return r.ok ? await r.json() : null;
+                        }}
+                    """)
+
+                    if not sample_prices_saved and prices:
+                        with open("output/sample_prices.json", "w", encoding="utf-8") as f:
+                            json.dump(prices, f, ensure_ascii=False, indent=2)
+                        sample_prices_saved = True
+
+                    if prices:
+                        price_list = (
+                            prices.get("realPriceList")
+                            or prices.get("list")
+                            or prices.get("priceList")
+                            or []
+                        )
+                        if price_list:
+                            latest = price_list[0]
+                            article["_real_price"] = (
+                                latest.get("dealOrWarrantPrc")
+                                or latest.get("price")
+                                or latest.get("prc", "")
+                            )
+                            article["_real_price_date"] = (
+                                latest.get("tradeYmd")
+                                or latest.get("dealDate")
+                                or latest.get("date", "")
+                            )
+
+            except Exception as e:
+                print(f"[fetch] 실거래가 조회 실패 ({ano}): {e}")
+
+        browser.close()
+
+    print(f"[fetch] 실거래가 조회 완료")
+    return articles
 
 
 def save_raw(articles_by_region: dict, output_dir: str) -> None:

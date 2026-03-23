@@ -25,14 +25,27 @@ def _parse_price(raw) -> int:
 
 CSV_COLUMNS = [
     "매물ID", "수집일자", "지역구", "단지명", "동호수",
-    "방개수", "호가", "면적", "초품아", "급매",
+    "방개수", "호가", "실거래가", "실거래_날짜", "면적", "초품아", "급매",
     "다주택자_의심", "판별_사유", "매물_설명", "매물_URL", "상태", "최종_업데이트",
 ]
 
 
 def _build_url(article: dict) -> str:
     article_no = str(article.get("articleNo", ""))
-    return f"https://m.land.naver.com/article/info/{article_no}"
+    complex_no = article.get("complexNo", "")
+    lat = article.get("latitude", "")
+    lng = article.get("longitude", "")
+    if complex_no and lat and lng:
+        return (
+            f"https://new.land.naver.com/complexes/{complex_no}"
+            f"?ms={lat},{lng},16&a=APT:PRE&b=A1&e=RETAIL&articleNo={article_no}"
+        )
+    if lat and lng:
+        return (
+            f"https://new.land.naver.com/"
+            f"?ms={lat},{lng},16&a=APT:PRE&b=A1&e=RETAIL&articleNo={article_no}"
+        )
+    return f"https://new.land.naver.com/articles/{article_no}"
 
 
 def _to_row(article: dict, analysis: dict) -> dict:
@@ -58,6 +71,8 @@ def _to_row(article: dict, analysis: dict) -> dict:
         "동호수": floor_info,
         "방개수": article.get("roomCount", 0),
         "호가": price,
+        "실거래가": article.get("_real_price", ""),
+        "실거래_날짜": article.get("_real_price_date", ""),
         "면적": area,
         "초품아": analysis.get("초품아", False),
         "급매": article.get("급매", False),
