@@ -8,7 +8,8 @@
   ],
   "filters": {
     "max_price_10k": 200000,
-    "min_rooms": 3
+    "min_rooms": 3,
+    "min_area": 80
   },
   "urgent_keywords": ["급매", "급처", "급급매", "가격조정"],
   "schedule": {

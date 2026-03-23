@@ -57,21 +57,33 @@ def flag_multihome(articles: list[dict]) -> list[dict]:
     return articles
 
 
+def apply_area_filter(articles: list[dict], min_area: int) -> list[dict]:
+    """면적 조건 미충족 매물 제거."""
+    before = len(articles)
+    result = [a for a in articles if (a.get("area1") or 0) >= min_area]
+    filtered_out = before - len(result)
+    if filtered_out:
+        print(f"[filter] 면적 {min_area}㎡ 미만 {filtered_out}건 제거 → {len(result)}건 남음")
+    return result
+
+
 def run_filter(articles: list[dict], filters: dict, urgent_keywords: list[str]) -> list[dict]:
     """
     전체 필터 파이프라인 실행.
 
     Args:
         articles: fetch.py에서 수집한 매물 리스트 (전 구 합산)
-        filters: {"min_rooms": 3, "max_price_10k": 200000}
+        filters: {"min_rooms": 3, "max_price_10k": 200000, "min_area": 80}
         urgent_keywords: ["급매", "급처", ...]
 
     Returns:
         필터 통과 + 플래그 부착된 매물 리스트
     """
     min_rooms = filters.get("min_rooms", 3)
+    min_area = filters.get("min_area", 80)
 
     filtered = apply_room_filter(articles, min_rooms)
+    filtered = apply_area_filter(filtered, min_area)
     filtered = flag_urgent(filtered, urgent_keywords)
     filtered = flag_multihome(filtered)
 

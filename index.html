@@ -152,6 +152,17 @@
 
     td.star-cell { text-align: center; padding: 6px 6px; }
 
+    .del-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 1rem;
+      color: #ccc;
+      padding: 2px 4px;
+      transition: color .15s;
+    }
+    .del-btn:hover { color: #e53935; }
+
     .no-results {
       text-align: center;
       padding: 40px;
@@ -185,6 +196,7 @@
   <table id="mainTable" style="display:none">
     <thead>
       <tr>
+        <th class="no-sort"></th>
         <th class="no-sort">★</th>
         <th onclick="sortTable(1)">매물ID <span class="sort-arrow">↕</span></th>
         <th onclick="sortTable(2)">지역구 <span class="sort-arrow">↕</span></th>
@@ -245,6 +257,17 @@ function parseCSV(text) {
     rows.push(row);
   }
   return rows;
+}
+
+// 삭제 목록 (localStorage 유지)
+const DEL_KEY = 'apt_deleted';
+let deleted = new Set(JSON.parse(localStorage.getItem(DEL_KEY) || '[]'));
+
+function deleteRow(id) {
+  deleted.add(id);
+  localStorage.setItem(DEL_KEY, JSON.stringify([...deleted]));
+  rawData = rawData.filter(r => r[0] !== id);
+  applyFilters();
 }
 
 // 즐겨찾기 (localStorage 유지)
@@ -323,6 +346,9 @@ function renderTable(data) {
                         : (r[17] || '-');
 
     return `<tr class="${rowCls}">
+      <td class="star-cell">
+        <button class="del-btn" title="삭제" onclick="deleteRow('${id}')">✕</button>
+      </td>
       <td class="star-cell">
         <button class="${starCls}" title="${starTip}"
           onclick="toggleFav('${id}', this)">★</button>
@@ -417,7 +443,7 @@ fetch('output/listings.csv')
     return r.text();
   })
   .then(text => {
-    rawData = parseCSV(text);
+    rawData = parseCSV(text).filter(r => !deleted.has(r[0]));
     filteredData = [...rawData];
     document.getElementById('loadingMsg').style.display = 'none';
     document.getElementById('mainTable').style.display = '';
