@@ -280,41 +280,48 @@ def enrich_with_realprices(articles: list[dict], auth_token: str) -> list[dict]:
                 if hscp_no:
                     article["complexNo"] = hscp_no  # URL 생성에 사용
 
-                    prices = page.evaluate(f"""
-                        async () => {{
-                            const auth = window.__capturedAuth || '';
-                            const r = await fetch(
-                                'https://new.land.naver.com/api/complexes/{hscp_no}/real-prices?tradeType=A1&year={year}&areaNo={ptp_no}&type=list',
-                                {{headers: {{'Authorization': auth, 'Referer': 'https://new.land.naver.com/', 'Accept': 'application/json'}}}}
-                            );
-                            return r.ok ? await r.json() : null;
-                        }}
-                    """)
+                    price_list = []
+                    for query_year in [year, year - 1]:
+                        prices = page.evaluate(f"""
+                            async () => {{
+                                const auth = window.__capturedAuth || '';
+                                const r = await fetch(
+                                    'https://new.land.naver.com/api/complexes/{hscp_no}/real-prices?tradeType=A1&year={query_year}&areaNo={ptp_no}&type=list',
+                                    {{headers: {{'Authorization': auth, 'Referer': 'https://new.land.naver.com/', 'Accept': 'application/json'}}}}
+                                );
+                                return r.ok ? await r.json() : null;
+                            }}
+                        """)
 
-                    if not sample_prices_saved and prices:
-                        with open("output/sample_prices.json", "w", encoding="utf-8") as f:
-                            json.dump(prices, f, ensure_ascii=False, indent=2)
-                        sample_prices_saved = True
+                        if not sample_prices_saved:
+                            os.makedirs("output", exist_ok=True)
+                            with open("output/sample_prices.json", "w", encoding="utf-8") as f:
+                                json.dump(prices, f, ensure_ascii=False, indent=2)
+                            print(f"[fetch] 실거래가 API 응답 샘플 저장 (hscpNo={hscp_no}, ptpNo={ptp_no}, year={query_year}): {str(prices)[:200]}")
+                            sample_prices_saved = True
 
-                    if prices:
-                        price_list = (
-                            prices.get("realPriceList")
-                            or prices.get("list")
-                            or prices.get("priceList")
-                            or []
+                        if prices:
+                            price_list = (
+                                prices.get("realPriceList")
+                                or prices.get("list")
+                                or prices.get("priceList")
+                                or []
+                            )
+                            if price_list:
+                                break  # 데이터 있으면 이전 연도 조회 불필요
+
+                    if price_list:
+                        latest = price_list[0]
+                        article["_real_price"] = (
+                            latest.get("dealOrWarrantPrc")
+                            or latest.get("price")
+                            or latest.get("prc", "")
                         )
-                        if price_list:
-                            latest = price_list[0]
-                            article["_real_price"] = (
-                                latest.get("dealOrWarrantPrc")
-                                or latest.get("price")
-                                or latest.get("prc", "")
-                            )
-                            article["_real_price_date"] = (
-                                latest.get("tradeYmd")
-                                or latest.get("dealDate")
-                                or latest.get("date", "")
-                            )
+                        article["_real_price_date"] = (
+                            latest.get("tradeYmd")
+                            or latest.get("dealDate")
+                            or latest.get("date", "")
+                        )
 
             except Exception as e:
                 print(f"[fetch] 실거래가 조회 실패 ({ano}): {e}")

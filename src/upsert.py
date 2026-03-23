@@ -5,6 +5,7 @@ CSV upsert 모듈.
 
 import os
 import re
+import time
 from datetime import datetime
 
 import pandas as pd
@@ -26,7 +27,7 @@ def _parse_price(raw) -> int:
 CSV_COLUMNS = [
     "매물ID", "수집일자", "지역구", "단지명", "동호수",
     "방개수", "호가", "실거래가", "실거래_날짜", "면적", "초품아", "급매",
-    "다주택자_의심", "판별_사유", "매물_설명", "매물_URL", "상태", "최종_업데이트",
+    "다주택자_의심", "판별_사유", "매물_설명", "매물_URL", "확인매물", "상태", "최종_업데이트",
 ]
 
 
@@ -63,6 +64,13 @@ def _to_row(article: dict, analysis: dict) -> dict:
     # 동/층
     floor_info = article.get("floorInfo", "")
 
+    # 확인매물 날짜: YYYYMMDD → YY.MM.DD. 형식
+    confirm_ymd_raw = str(article.get("articleConfirmYmd", "") or "")
+    if len(confirm_ymd_raw) == 8 and confirm_ymd_raw.isdigit():
+        confirm_ymd = f"{confirm_ymd_raw[2:4]}.{confirm_ymd_raw[4:6]}.{confirm_ymd_raw[6:8]}."
+    else:
+        confirm_ymd = confirm_ymd_raw
+
     return {
         "매물ID": article_no,
         "수집일자": today,
@@ -80,6 +88,7 @@ def _to_row(article: dict, analysis: dict) -> dict:
         "판별_사유": analysis.get("판별_사유", ""),
         "매물_설명": article.get("articleFeatureDesc", ""),
         "매물_URL": _build_url(article),
+        "확인매물": confirm_ymd,
         "상태": "활성",
         "최종_업데이트": now,
     }
@@ -106,6 +115,11 @@ def upsert_listings(
     # 기존 CSV 로드 또는 빈 DataFrame 생성
     if os.path.exists(csv_path):
         existing = pd.read_csv(csv_path, dtype={"매물ID": str})
+        # 컬럼 추가/변경 시 기존 파일에 없는 컬럼을 빈값으로 추가
+        for col in CSV_COLUMNS:
+            if col not in existing.columns:
+                existing[col] = ""
+        existing = existing[CSV_COLUMNS]  # 컬럼 순서 통일
     else:
         existing = pd.DataFrame(columns=CSV_COLUMNS)
 
@@ -144,6 +158,7 @@ def upsert_listings(
             existing.at[idx, "급매"] = new_row["급매"]
             existing.at[idx, "다주택자_의심"] = new_row["다주택자_의심"]
             existing.at[idx, "판별_사유"] = new_row["판별_사유"]
+            existing.at[idx, "확인매물"] = new_row["확인매물"]
             updated_count += 1
         else:
             rows_to_upsert.append(new_row)
@@ -158,7 +173,17 @@ def upsert_listings(
         dupes = existing[existing["매물ID"].duplicated()]["매물ID"].tolist()
         raise RuntimeError(f"CSV upsert 후 중복 매물 ID 발견: {dupes}")
 
-    existing.to_csv(csv_path, index=False, encoding="utf-8-sig")
+    for attempt in range(5):
+        try:
+            existing.to_csv(csv_path, index=False, encoding="utf-8-sig")
+            break
+        except PermissionError:
+            if attempt == 4:
+                raise RuntimeError(
+                    f"CSV 저장 실패: '{csv_path}' 파일이 다른 프로그램(Excel 등)에서 열려 있습니다. 닫고 다시 실행하세요."
+                )
+            print(f"[upsert] CSV 파일 잠김, {3}초 후 재시도 ({attempt+1}/5)...")
+            time.sleep(3)
 
     return {
         "new": new_count,
