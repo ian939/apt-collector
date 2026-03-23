@@ -293,11 +293,13 @@ def enrich_with_realprices(articles: list[dict], auth_token: str) -> list[dict]:
                         }}
                     """)
 
-                    if not sample_prices_saved and prices is not None:
+                    total_rows = prices.get("totalRowCount", 0) if isinstance(prices, dict) else -1
+                    print(f"[fetch] 실거래가 ({ano}, hscp={hscp_no}, ptp={ptp_no}): totalRowCount={total_rows}")
+
+                    if not sample_prices_saved and isinstance(prices, dict) and total_rows > 0:
                         os.makedirs("output", exist_ok=True)
                         with open("output/sample_prices.json", "w", encoding="utf-8") as f:
                             json.dump(prices, f, ensure_ascii=False, indent=2)
-                        print(f"[fetch] 실거래가 응답 구조: {list(prices.keys()) if isinstance(prices, dict) else type(prices)}")
                         sample_prices_saved = True
 
                     if prices:
