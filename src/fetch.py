@@ -246,6 +246,13 @@ def enrich_with_realprices(articles: list[dict], auth_token: str) -> list[dict]:
         except Exception:
             pass
 
+        # 네트워크 요청 인터셉트: price 관련 API URL 캡처
+        captured_price_urls = []
+        def handle_request(request):
+            if "price" in request.url.lower() or "real" in request.url.lower():
+                captured_price_urls.append(request.url)
+        page.on("request", handle_request)
+
         print(f"[fetch] 실거래가 조회 시작: {len(articles)}건")
 
         for article in articles:
@@ -280,6 +287,21 @@ def enrich_with_realprices(articles: list[dict], auth_token: str) -> list[dict]:
                 if hscp_no:
                     article["complexNo"] = hscp_no  # URL 생성에 사용
 
+                    # 첫 매물에서 실제 API URL 탐색: 복잡 페이지 열어서 네트워크 요청 캡처
+                    if not sample_prices_saved:
+                        captured_price_urls.clear()
+                        try:
+                            article_url = f"https://new.land.naver.com/complexes/{hscp_no}?a=APT&b=A1&articleNo={ano}"
+                            page.goto(article_url, wait_until="domcontentloaded", timeout=20000)
+                            page.wait_for_timeout(4000)
+                        except Exception as e:
+                            print(f"[fetch] 복잡 페이지 로드 실패: {e}")
+                        os.makedirs("output", exist_ok=True)
+                        with open("output/sample_prices.json", "w", encoding="utf-8") as f:
+                            json.dump({"captured_urls": captured_price_urls, "hscp_no": hscp_no, "ptp_no": ptp_no}, f, ensure_ascii=False, indent=2)
+                        print(f"[fetch] 캡처된 price URL: {captured_price_urls}")
+                        sample_prices_saved = True
+
                     price_list = []
                     for query_year in [year, year - 1]:
                         prices = page.evaluate(f"""
@@ -290,24 +312,12 @@ def enrich_with_realprices(articles: list[dict], auth_token: str) -> list[dict]:
                                     {{headers: {{'Authorization': auth, 'Referer': 'https://new.land.naver.com/', 'Accept': 'application/json'}}}}
                                 );
                                 const text = await r.text();
-                                return {{status: r.status, body: text}};
+                                return {{status: r.status, body: text.substring(0, 500)}};
                             }}
                         """)
-
-                        if not sample_prices_saved:
-                            os.makedirs("output", exist_ok=True)
-                            with open("output/sample_prices.json", "w", encoding="utf-8") as f:
-                                json.dump(prices, f, ensure_ascii=False, indent=2)
-                            print(f"[fetch] 실거래가 API 응답 (hscpNo={hscp_no}, ptpNo={ptp_no}, year={query_year}): status={prices.get('status') if prices else 'N/A'} body={str(prices.get('body',''))[:300]}")
-                            sample_prices_saved = True
-
-                        if prices and prices.get("status") == 200:
-                            import json as _json
-                            try:
-                                data = _json.loads(prices["body"])
-                            except Exception:
-                                data = {}
-                            prices = data  # 하위 코드 호환
+                        if prices:
+                            print(f"[fetch] real-prices status={prices.get('status')} body={prices.get('body','')[:200]}")
+                            break  # 첫 매물만 확인
 
                         if prices:
                             price_list = (
