@@ -45,7 +45,10 @@ def notify_urgent(article: dict) -> bool:
 
     포함 필드: 단지명, 지역구, 호가, 면적, URL
     """
-    price = article.get("호가", 0)
+    try:
+        price = int(str(article.get("호가", 0)).replace(",", "") or 0)
+    except (ValueError, TypeError):
+        price = 0
     price_str = f"{price // 10000}억 {price % 10000:,}만원" if price >= 10000 else f"{price:,}만원"
 
     text = (
