@@ -1,4 +1,6 @@
+output/listings.csv
 output/temp/
+output/sample_*.json
 
 # 환경변수
 .env
