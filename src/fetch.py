@@ -289,7 +289,8 @@ def enrich_with_realprices(articles: list[dict], auth_token: str) -> list[dict]:
                                     'https://new.land.naver.com/api/complexes/{hscp_no}/real-prices?tradeType=A1&year={query_year}&areaNo={ptp_no}&type=list',
                                     {{headers: {{'Authorization': auth, 'Referer': 'https://new.land.naver.com/', 'Accept': 'application/json'}}}}
                                 );
-                                return r.ok ? await r.json() : null;
+                                const text = await r.text();
+                                return {{status: r.status, body: text}};
                             }}
                         """)
 
@@ -297,8 +298,16 @@ def enrich_with_realprices(articles: list[dict], auth_token: str) -> list[dict]:
                             os.makedirs("output", exist_ok=True)
                             with open("output/sample_prices.json", "w", encoding="utf-8") as f:
                                 json.dump(prices, f, ensure_ascii=False, indent=2)
-                            print(f"[fetch] 실거래가 API 응답 샘플 저장 (hscpNo={hscp_no}, ptpNo={ptp_no}, year={query_year}): {str(prices)[:200]}")
+                            print(f"[fetch] 실거래가 API 응답 (hscpNo={hscp_no}, ptpNo={ptp_no}, year={query_year}): status={prices.get('status') if prices else 'N/A'} body={str(prices.get('body',''))[:300]}")
                             sample_prices_saved = True
+
+                        if prices and prices.get("status") == 200:
+                            import json as _json
+                            try:
+                                data = _json.loads(prices["body"])
+                            except Exception:
+                                data = {}
+                            prices = data  # 하위 코드 호환
 
                         if prices:
                             price_list = (
