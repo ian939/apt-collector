@@ -300,27 +300,31 @@ def enrich_with_realprices(articles: list[dict], auth_token: str) -> list[dict]:
                         print(f"[fetch] 실거래가 응답 구조: {list(prices.keys()) if isinstance(prices, dict) else type(prices)}")
                         sample_prices_saved = True
 
-                    price_list = []
                     if prices:
-                        price_list = (
-                            prices.get("realPriceList")
-                            or prices.get("list")
-                            or prices.get("priceList")
-                            or []
-                        )
-
-                    if price_list:
-                        latest = price_list[0]
-                        article["_real_price"] = (
-                            latest.get("dealOrWarrantPrc")
-                            or latest.get("price")
-                            or latest.get("prc", "")
-                        )
-                        article["_real_price_date"] = (
-                            latest.get("tradeYmd")
-                            or latest.get("dealDate")
-                            or latest.get("date", "")
-                        )
+                        monthly_list = prices.get("realPriceOnMonthList") or []
+                        for month_data in monthly_list:
+                            # 월별 묶음 → 안에 실거래 리스트가 있을 수 있음
+                            inner = (
+                                month_data.get("realPriceList")
+                                or month_data.get("list")
+                                or []
+                            )
+                            if inner:
+                                latest = inner[0]
+                                ym = str(month_data.get("tradeYearMonth", ""))
+                                day = str(latest.get("dealDay", ""))
+                                date_str = f"{ym[:4]}.{ym[4:6]}.{day.zfill(2)}." if len(ym) == 6 else ym
+                                article["_real_price"] = latest.get("dealOrWarrantPrc") or latest.get("prc", "")
+                                article["_real_price_date"] = date_str
+                                break
+                            elif month_data.get("dealOrWarrantPrc") or month_data.get("prc"):
+                                # 평탄한 구조
+                                ym = str(month_data.get("tradeYearMonth", ""))
+                                day = str(month_data.get("dealDay", ""))
+                                date_str = f"{ym[:4]}.{ym[4:6]}.{day.zfill(2)}." if len(ym) == 6 else ym
+                                article["_real_price"] = month_data.get("dealOrWarrantPrc") or month_data.get("prc", "")
+                                article["_real_price_date"] = date_str
+                                break
 
             except Exception as e:
                 print(f"[fetch] 실거래가 조회 실패 ({ano}): {e}")
