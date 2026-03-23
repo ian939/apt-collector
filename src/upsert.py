@@ -124,6 +124,10 @@ def upsert_listings(
         existing = pd.DataFrame(columns=CSV_COLUMNS)
 
     existing["매물ID"] = existing["매물ID"].astype(str)
+    # 문자열 컬럼이 빈 값으로 인해 float64로 읽히는 경우 방지
+    for col in ["실거래가", "실거래_날짜", "확인매물", "동호수", "판별_사유", "매물_설명"]:
+        if col in existing.columns:
+            existing[col] = existing[col].astype(object)
 
     # 입력 매물 중복 제거 (같은 articleNo가 여러 페이지에 걸쳐 중복 수집될 수 있음)
     seen = set()
