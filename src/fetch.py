@@ -168,6 +168,10 @@ def fetch_all_regions(regions: list[dict], max_price_10k: int) -> tuple[dict, di
                     if not articles:
                         break
 
+                    # 첫 페이지 첫 매물의 키 목록 출력 (URL 필드 확인용)
+                    if page_num == 1 and not all_articles:
+                        print(f"[fetch] {name} 매물 필드: {list(articles[0].keys())}")
+
                     for article in articles:
                         article["_region"] = name
                     all_articles.extend(articles)
