@@ -168,13 +168,6 @@ def fetch_all_regions(regions: list[dict], max_price_10k: int) -> tuple[dict, di
                     if not articles:
                         break
 
-                    # 첫 지역 첫 매물 샘플 저장 (URL 필드 확인용)
-                    if page_num == 1 and not all_articles and not results:
-                        import json as _json, os as _os
-                        _os.makedirs("output", exist_ok=True)
-                        with open("output/sample_article.json", "w", encoding="utf-8") as _f:
-                            _json.dump(articles[0], _f, ensure_ascii=False, indent=2)
-
                     for article in articles:
                         article["_region"] = name
                     all_articles.extend(articles)

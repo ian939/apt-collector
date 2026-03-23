@@ -31,10 +31,14 @@ CSV_COLUMNS = [
 
 
 def _build_url(article: dict) -> str:
-    complex_no = article.get("complexNo", "")
     article_no = str(article.get("articleNo", ""))
-    if complex_no:
-        return f"https://new.land.naver.com/complexes/{complex_no}?articleNo={article_no}"
+    lat = article.get("latitude", "")
+    lng = article.get("longitude", "")
+    if lat and lng:
+        return (
+            f"https://new.land.naver.com/articles/{article_no}"
+            f"?ms={lat},{lng},17&a=APT&b=A1"
+        )
     return f"https://new.land.naver.com/articles/{article_no}"
 
 
