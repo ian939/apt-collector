@@ -37,10 +37,10 @@ jobs:
           PYTHONUTF8: 1
 
       - name: 로그 커밋 및 푸시
-        shell: bash
+        shell: pwsh
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add output/logs/
-          git diff --cached --quiet || git commit -m "log: $(date +'%Y-%m-%d') 수집 완료"
+          $diff = git diff --cached --quiet; if ($LASTEXITCODE -ne 0) { git commit -m "log: $(Get-Date -Format 'yyyy-MM-dd') 수집 완료" }
           git push
