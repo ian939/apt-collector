@@ -305,27 +305,11 @@ def enrich_with_realprices(articles: list[dict], auth_token: str) -> list[dict]:
                     if prices:
                         monthly_list = prices.get("realPriceOnMonthList") or []
                         for month_data in monthly_list:
-                            # 월별 묶음 → 안에 실거래 리스트가 있을 수 있음
-                            inner = (
-                                month_data.get("realPriceList")
-                                or month_data.get("list")
-                                or []
-                            )
+                            inner = month_data.get("realPriceList") or []
                             if inner:
                                 latest = inner[0]
-                                ym = str(month_data.get("tradeYearMonth", ""))
-                                day = str(latest.get("dealDay", ""))
-                                date_str = f"{ym[:4]}.{ym[4:6]}.{day.zfill(2)}." if len(ym) == 6 else ym
-                                article["_real_price"] = latest.get("dealOrWarrantPrc") or latest.get("prc", "")
-                                article["_real_price_date"] = date_str
-                                break
-                            elif month_data.get("dealOrWarrantPrc") or month_data.get("prc"):
-                                # 평탄한 구조
-                                ym = str(month_data.get("tradeYearMonth", ""))
-                                day = str(month_data.get("dealDay", ""))
-                                date_str = f"{ym[:4]}.{ym[4:6]}.{day.zfill(2)}." if len(ym) == 6 else ym
-                                article["_real_price"] = month_data.get("dealOrWarrantPrc") or month_data.get("prc", "")
-                                article["_real_price_date"] = date_str
+                                article["_real_price"] = latest.get("dealPrice", "")
+                                article["_real_price_date"] = latest.get("formattedTradeYearMonth", "")
                                 break
 
             except Exception as e:
