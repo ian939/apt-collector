@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>매물 목록 뷰어</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', 'Malgun Gothic', sans-serif;
+      background: #f0f2f5;
+      color: #333;
+      padding: 24px;
+    }
+
+    h1 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      margin-bottom: 16px;
+      color: #1a1a2e;
+    }
+
+    .toolbar {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+      align-items: center;
+    }
+
+    .toolbar input[type="text"] {
+      padding: 7px 12px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 0.88rem;
+      width: 220px;
+      outline: none;
+      transition: border-color .2s;
+    }
+    .toolbar input[type="text"]:focus { border-color: #4f78ff; }
+
+    .filter-btn {
+      padding: 7px 14px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      background: #fff;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: background .15s, border-color .15s;
+    }
+    .filter-btn:hover { background: #e8ecff; border-color: #4f78ff; }
+    .filter-btn.active { background: #4f78ff; color: #fff; border-color: #4f78ff; }
+
+    .filter-btn.fav-btn:hover { background: #fff8e1; border-color: #f9a825; }
+    .filter-btn.fav-btn.active { background: #f9a825; color: #fff; border-color: #f9a825; }
+
+    .count-badge {
+      font-size: 0.82rem;
+      color: #666;
+      margin-left: auto;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 2px 12px rgba(0,0,0,.08);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.83rem;
+    }
+
+    thead th {
+      background: #1a1a2e;
+      color: #fff;
+      padding: 11px 10px;
+      text-align: left;
+      white-space: nowrap;
+      cursor: pointer;
+      user-select: none;
+      position: sticky;
+      top: 0;
+      z-index: 2;
+    }
+    thead th:hover { background: #2d2d4e; }
+    thead th.no-sort { cursor: default; }
+    thead th.no-sort:hover { background: #1a1a2e; }
+    thead th .sort-arrow { font-size: 0.7rem; margin-left: 4px; opacity: .5; }
+    thead th.sorted .sort-arrow { opacity: 1; }
+
+    tbody tr { border-bottom: 1px solid #f0f0f0; transition: background .1s; }
+    tbody tr:hover { background: #f5f7ff; }
+    tbody tr.favorited { background: #fffde7; }
+    tbody tr.favorited:hover { background: #fff9c4; }
+    tbody tr:last-child { border-bottom: none; }
+
+    td {
+      padding: 9px 10px;
+      vertical-align: middle;
+      max-width: 240px;
+    }
+
+    td.desc   { max-width: 260px; font-size: 0.78rem; color: #555; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    td.reason { max-width: 200px; font-size: 0.75rem; color: #777; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 0.73rem;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .badge-true   { background: #e6f4ea; color: #2d7a46; }
+    .badge-false  { background: #f5f5f5; color: #999; }
+    .badge-active { background: #e3f0ff; color: #1565c0; }
+
+    .price { font-weight: 600; color: #c0392b; }
+    .real-price { font-weight: 600; color: #1565c0; }
+
+    .link-btn {
+      display: inline-block;
+      padding: 3px 9px;
+      background: #4f78ff;
+      color: #fff;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+    .link-btn:hover { background: #3558cc; }
+
+    .apt-name { font-weight: 600; }
+    .id-cell  { font-size: 0.75rem; color: #999; }
+
+    .star-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 1.2rem;
+      line-height: 1;
+      padding: 2px 4px;
+      transition: transform .15s;
+      color: #ccc;
+    }
+    .star-btn:hover { transform: scale(1.25); }
+    .star-btn.on { color: #f9a825; }
+
+    td.star-cell { text-align: center; padding: 6px 6px; }
+
+    .no-results {
+      text-align: center;
+      padding: 40px;
+      color: #999;
+      font-size: 0.9rem;
+    }
+
+    #loadingMsg {
+      text-align: center;
+      padding: 40px;
+      color: #999;
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+
+<h1>📋 매물 목록 뷰어</h1>
+
+<div class="toolbar">
+  <input type="text" id="searchInput" placeholder="단지명, 설명 등 검색…" oninput="applyFilters()">
+  <button class="filter-btn" id="btn-급매" onclick="toggleFilter('급매')">급매</button>
+  <button class="filter-btn" id="btn-초품아" onclick="toggleFilter('초품아')">초품아</button>
+  <button class="filter-btn" id="btn-다주택자" onclick="toggleFilter('다주택자')">다주택자 의심</button>
+  <button class="filter-btn fav-btn" id="btn-즐겨찾기" onclick="toggleFilter('즐겨찾기')">★ 즐겨찾기</button>
+  <span class="count-badge" id="countBadge"></span>
+</div>
+
+<div class="table-wrap">
+  <div id="loadingMsg">데이터 로딩 중...</div>
+  <table id="mainTable" style="display:none">
+    <thead>
+      <tr>
+        <th class="no-sort">★</th>
+        <th onclick="sortTable(1)">매물ID <span class="sort-arrow">↕</span></th>
+        <th onclick="sortTable(2)">지역구 <span class="sort-arrow">↕</span></th>
+        <th onclick="sortTable(3)">단지명 <span class="sort-arrow">↕</span></th>
+        <th onclick="sortTable(4)">동호수 <span class="sort-arrow">↕</span></th>
+        <th onclick="sortTable(5)">호가 <span class="sort-arrow">↕</span></th>
+        <th onclick="sortTable(6)">실거래가 <span class="sort-arrow">↕</span></th>
+        <th onclick="sortTable(7)">거래일 <span class="sort-arrow">↕</span></th>
+        <th onclick="sortTable(8)">면적(㎡) <span class="sort-arrow">↕</span></th>
+        <th onclick="sortTable(9)">초품아 <span class="sort-arrow">↕</span></th>
+        <th onclick="sortTable(10)">급매 <span class="sort-arrow">↕</span></th>
+        <th onclick="sortTable(11)">다주택자 <span class="sort-arrow">↕</span></th>
+        <th class="no-sort">판별 사유</th>
+        <th class="no-sort">매물 설명</th>
+        <th class="no-sort">확인매물</th>
+        <th onclick="sortTable(15)">상태 <span class="sort-arrow">↕</span></th>
+        <th class="no-sort">링크</th>
+      </tr>
+    </thead>
+    <tbody id="tableBody"></tbody>
+  </table>
+  <div id="noResults" class="no-results" style="display:none">검색 결과가 없습니다.</div>
+</div>
+
+<script>
+// 인덱스: 0=매물ID, 1=수집일자, 2=지역구, 3=단지명, 4=동호수, 5=방개수,
+//         6=호가, 7=실거래가, 8=실거래_날짜, 9=면적,
+//         10=초품아, 11=급매, 12=다주택자_의심, 13=판별_사유, 14=매물_설명,
+//         15=매물_URL, 16=확인매물, 17=상태, 18=최종_업데이트
+
+let rawData = [];
+
+// CSV 파싱 (따옴표 포함 처리)
+function parseCSV(text) {
+  const lines = text.replace(/\r/g, '').split('\n').filter(l => l.trim());
+  if (lines.length < 2) return [];
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cols = [];
+    let cur = '', inQ = false;
+    for (let c = 0; c < lines[i].length; c++) {
+      const ch = lines[i][c];
+      if (ch === '"') { inQ = !inQ; }
+      else if (ch === ',' && !inQ) { cols.push(cur); cur = ''; }
+      else { cur += ch; }
+    }
+    cols.push(cur);
+    // 타입 변환: 호가/실거래가/면적 숫자, 초품아/급매/다주택자 bool
+    const row = cols.map((v, idx) => {
+      if (idx === 6 || idx === 7 || idx === 9) {
+        const n = Number(v); return isNaN(n) ? v : n;
+      }
+      if (idx === 10 || idx === 11 || idx === 12) {
+        return v === 'True' || v === 'true';
+      }
+      return v;
+    });
+    rows.push(row);
+  }
+  return rows;
+}
+
+// 즐겨찾기 (localStorage 유지)
+const FAV_KEY = 'apt_favorites';
+let favorites = new Set(JSON.parse(localStorage.getItem(FAV_KEY) || '[]'));
+
+function saveFavorites() {
+  localStorage.setItem(FAV_KEY, JSON.stringify([...favorites]));
+}
+
+function toggleFav(id, btn) {
+  if (favorites.has(id)) {
+    favorites.delete(id);
+    btn.classList.remove('on');
+    btn.title = '즐겨찾기 추가';
+    btn.closest('tr').classList.remove('favorited');
+  } else {
+    favorites.add(id);
+    btn.classList.add('on');
+    btn.title = '즐겨찾기 해제';
+    btn.closest('tr').classList.add('favorited');
+  }
+  saveFavorites();
+  if (activeFilters.has('즐겨찾기')) applyFilters();
+}
+
+let sortCol = -1;
+let sortAsc = true;
+let activeFilters = new Set();
+let filteredData = [];
+
+function formatPrice(val) {
+  if (val === '' || val === null || val === undefined) return '-';
+  const num = Number(val);
+  if (isNaN(num) || num === 0) return '-';
+  const eok = Math.floor(num / 10000);
+  const man = num % 10000;
+  if (eok > 0 && man > 0) return `${eok}억 ${man.toLocaleString()}만`;
+  if (eok > 0) return `${eok}억`;
+  return `${num.toLocaleString()}만`;
+}
+
+function badge(val) {
+  if (val === true || val === 'true' || val === 'True')
+    return '<span class="badge badge-true">✓</span>';
+  return '<span class="badge badge-false">✗</span>';
+}
+
+function renderTable(data) {
+  const tbody = document.getElementById('tableBody');
+  const noRes = document.getElementById('noResults');
+  document.getElementById('countBadge').textContent = `총 ${data.length}건`;
+
+  if (data.length === 0) {
+    tbody.innerHTML = '';
+    noRes.style.display = '';
+    return;
+  }
+  noRes.style.display = 'none';
+
+  tbody.innerHTML = data.map(r => {
+    const id      = r[0];
+    const isFav   = favorites.has(id);
+    const starCls = isFav ? 'star-btn on' : 'star-btn';
+    const starTip = isFav ? '즐겨찾기 해제' : '즐겨찾기 추가';
+    const rowCls  = isFav ? 'favorited' : '';
+
+    const price     = formatPrice(r[6]);
+    const realPrice = formatPrice(r[7]);
+    const tradeDate = r[8] || '-';
+    const area      = r[9] ? `${r[9]}㎡` : '-';
+    const url       = r[15];
+    const verified  = r[16] ? `<span class="badge badge-active">${r[16]}</span>` : '-';
+    const status    = r[17] === '활성'
+                        ? `<span class="badge badge-active">${r[17]}</span>`
+                        : (r[17] || '-');
+
+    return `<tr class="${rowCls}">
+      <td class="star-cell">
+        <button class="${starCls}" title="${starTip}"
+          onclick="toggleFav('${id}', this)">★</button>
+      </td>
+      <td class="id-cell">${id}</td>
+      <td>${r[2]}</td>
+      <td class="apt-name">${r[3]}</td>
+      <td>${r[4]}</td>
+      <td class="price">${price}</td>
+      <td class="real-price">${realPrice}</td>
+      <td>${tradeDate}</td>
+      <td>${area}</td>
+      <td style="text-align:center">${badge(r[10])}</td>
+      <td style="text-align:center">${badge(r[11])}</td>
+      <td style="text-align:center">${badge(r[12])}</td>
+      <td class="reason" title="${r[13]}">${r[13]}</td>
+      <td class="desc"   title="${r[14]}">${r[14]}</td>
+      <td>${verified}</td>
+      <td>${status}</td>
+      <td>${url ? `<a class="link-btn" href="${url}" target="_blank">보기</a>` : '-'}</td>
+    </tr>`;
+  }).join('');
+}
+
+function applyFilters() {
+  const q = document.getElementById('searchInput').value.toLowerCase();
+  filteredData = rawData.filter(r => {
+    const text = [r[0], r[3], r[4], r[13], r[14]].join(' ').toLowerCase();
+    if (q && !text.includes(q)) return false;
+    if (activeFilters.has('급매')     && !r[11]) return false;
+    if (activeFilters.has('초품아')   && !r[10]) return false;
+    if (activeFilters.has('다주택자') && !r[12]) return false;
+    if (activeFilters.has('즐겨찾기') && !favorites.has(r[0])) return false;
+    return true;
+  });
+  if (sortCol >= 0) doSort(false);
+  else renderTable(filteredData);
+}
+
+function toggleFilter(name) {
+  const btn = document.getElementById('btn-' + name);
+  if (activeFilters.has(name)) {
+    activeFilters.delete(name);
+    btn.classList.remove('active');
+  } else {
+    activeFilters.add(name);
+    btn.classList.add('active');
+  }
+  applyFilters();
+}
+
+const sortKeys = [null, 0, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12, null, null, null, 17, null];
+
+function sortTable(colIdx) {
+  if (sortCol === colIdx) sortAsc = !sortAsc;
+  else { sortCol = colIdx; sortAsc = true; }
+
+  document.querySelectorAll('thead th').forEach(th => {
+    th.classList.remove('sorted');
+    const arr = th.querySelector('.sort-arrow');
+    if (arr) arr.textContent = '↕';
+  });
+  const th = document.querySelectorAll('thead th')[colIdx];
+  th.classList.add('sorted');
+  const arr = th.querySelector('.sort-arrow');
+  if (arr) arr.textContent = sortAsc ? '↑' : '↓';
+  doSort(true);
+}
+
+function doSort(rerender) {
+  const dataKey = sortKeys[sortCol];
+  if (dataKey === null) return;
+  filteredData.sort((a, b) => {
+    let va = a[dataKey], vb = b[dataKey];
+    if (typeof va === 'boolean') { va = va ? 1 : 0; vb = vb ? 1 : 0; }
+    else if (!isNaN(Number(va)) && !isNaN(Number(vb)) && va !== '' && vb !== '') {
+      va = Number(va); vb = Number(vb);
+    } else {
+      va = String(va).toLowerCase(); vb = String(vb).toLowerCase();
+    }
+    if (va < vb) return sortAsc ? -1 : 1;
+    if (va > vb) return sortAsc ? 1 : -1;
+    return 0;
+  });
+  renderTable(filteredData);
+}
+
+// CSV 로드
+fetch('output/listings.csv')
+  .then(r => {
+    if (!r.ok) throw new Error('CSV 로드 실패: ' + r.status);
+    return r.text();
+  })
+  .then(text => {
+    rawData = parseCSV(text);
+    filteredData = [...rawData];
+    document.getElementById('loadingMsg').style.display = 'none';
+    document.getElementById('mainTable').style.display = '';
+    renderTable(rawData);
+  })
+  .catch(err => {
+    document.getElementById('loadingMsg').textContent = '데이터 로드 실패: ' + err.message;
+  });
+</script>
+</body>
+</html>

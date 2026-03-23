@@ -40,6 +40,9 @@ def _send(text: str, max_retry: int = 1) -> bool:
     return False
 
 
+PAGES_URL = "https://ian939.github.io/apt-collector/"
+
+
 def notify_summary(
     total_raw: int,
     new_count: int,
@@ -47,21 +50,13 @@ def notify_summary(
     urgent_count: int,
     chopo_urgent_count: int,
 ) -> bool:
-    """
-    수집 완료 요약 알림 1건 전송.
-
-    Args:
-        total_raw: 전체 수집 건수 (필터 전)
-        new_count: CSV 신규 저장 건수
-        updated_count: CSV 갱신 건수
-        urgent_count: 급매 후보 건수
-        chopo_urgent_count: 급매 중 초품아 건수
-    """
+    """수집 완료 요약 알림 1건 전송."""
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
     text = (
         f"[수집완료] {now}\n"
         f"수집: {total_raw:,}건 | 신규저장: {new_count:,}건 | 갱신: {updated_count:,}건\n"
-        f"급매: {urgent_count:,}건 | 급매+초품아: {chopo_urgent_count:,}건"
+        f"급매: {urgent_count:,}건 | 급매+초품아: {chopo_urgent_count:,}건\n"
+        f"📋 매물 보기: {PAGES_URL}"
     )
     return _send(text)
 
