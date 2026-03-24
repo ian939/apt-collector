@@ -2,7 +2,7 @@ name: 매물 수집
 
 on:
   schedule:
-    - cron: '0 0 * * *'    # 매일 오전 9시 KST (UTC 00:00)
+    - cron: '0 1 * * *'    # 매일 오전 10시 KST (UTC 01:00)
   workflow_dispatch:         # 수동 실행 허용
 
 jobs:
