@@ -152,17 +152,9 @@ def upsert_listings(
         new_row = _to_row(article, analysis)
 
         if article_no in existing["매물ID"].values:
-            # 갱신: 호가·설명·최종_업데이트만 업데이트 (상태는 건드리지 않음)
+            # 갱신: 최종_업데이트 날짜만 업데이트
             idx = existing.index[existing["매물ID"] == article_no][0]
-            existing.at[idx, "호가"] = new_row["호가"]
-            existing.at[idx, "매물_설명"] = new_row["매물_설명"]
-            existing.at[idx, "수집일자"] = new_row["수집일자"]
             existing.at[idx, "최종_업데이트"] = new_row["최종_업데이트"]
-            existing.at[idx, "초품아"] = new_row["초품아"]
-            existing.at[idx, "급매"] = new_row["급매"]
-            existing.at[idx, "다주택자_의심"] = new_row["다주택자_의심"]
-            existing.at[idx, "판별_사유"] = new_row["판별_사유"]
-            existing.at[idx, "확인매물"] = new_row["확인매물"]
             if new_row.get("실거래가"):
                 existing.at[idx, "실거래가"] = new_row["실거래가"]
                 existing.at[idx, "실거래_날짜"] = new_row["실거래_날짜"]

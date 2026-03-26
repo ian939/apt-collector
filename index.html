@@ -214,6 +214,7 @@
         <th class="no-sort">확인매물</th>
         <th onclick="sortTable(15)">상태 <span class="sort-arrow">↕</span></th>
         <th class="no-sort">링크</th>
+        <th onclick="sortTable(18)">업데이트 <span class="sort-arrow">↕</span></th>
       </tr>
     </thead>
     <tbody id="tableBody"></tbody>
@@ -369,6 +370,7 @@ function renderTable(data) {
       <td>${verified}</td>
       <td>${status}</td>
       <td>${url ? `<a class="link-btn" href="${url}" target="_blank">보기</a>` : '-'}</td>
+      <td style="font-size:0.78rem;color:#888;white-space:nowrap">${(r[18] || '').slice(0,10)}</td>
     </tr>`;
   }).join('');
 }
