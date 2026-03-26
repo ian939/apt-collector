@@ -4,7 +4,10 @@
     { "name": "강동구", "cortarNo": "1174000000" },
     { "name": "광진구", "cortarNo": "1121000000" },
     { "name": "송파구", "cortarNo": "1171000000" },
-    { "name": "서초구", "cortarNo": "1165000000" }
+    { "name": "서초구", "cortarNo": "1165000000" },
+    { "name": "성동구", "cortarNo": "1120000000" },
+    { "name": "마포구", "cortarNo": "1144000000" },
+    { "name": "동작구", "cortarNo": "1156000000" }
   ],
   "filters": {
     "max_price_10k": 200000,
