@@ -12,7 +12,7 @@
     { "name": "자양동", "cortarNo": "1121510300" }
   ],
   "filters": {
-    "max_price_10k": 200000,
+    "max_price_10k": 180000,
     "min_rooms": 3,
     "min_area": 80
   },

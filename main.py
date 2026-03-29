@@ -60,10 +60,15 @@ def load_config() -> dict:
 
 
 def flatten_articles(articles_by_region: dict) -> list[dict]:
-    """구별 매물 딕셔너리를 단일 리스트로 병합."""
+    """구별 매물 딕셔너리를 단일 리스트로 병합. 동일 articleNo 중복 제거."""
+    seen = set()
     result = []
     for articles in articles_by_region.values():
-        result.extend(articles)
+        for a in articles:
+            aid = str(a.get("articleNo", ""))
+            if aid and aid not in seen:
+                seen.add(aid)
+                result.append(a)
     return result
 
 
